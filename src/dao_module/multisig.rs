@@ -1,13 +1,50 @@
-use solana_sdk::{instruction::Instruction, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer, system_program, transaction::Transaction};
+use solana_sdk::{
+        instruction::Instruction,
+        message::Message,
+        pubkey::Pubkey,
+        signature::Keypair,
+        signer::Signer,
+        system_program,
+        transaction::Transaction
+    };
 use squads_multisig::{
-    anchor_lang::{AccountDeserialize},
-    client::{self, config_transaction_create, config_transaction_execute, multisig_create_v2, proposal_approve, proposal_cancel, proposal_create, ConfigTransactionCreateAccounts, ConfigTransactionCreateArgs, ConfigTransactionExecuteAccounts, MultisigCreateAccountsV2, MultisigCreateArgsV2, ProposalCreateArgs, ProposalVoteAccounts, ProposalVoteArgs},
-    pda::{get_proposal_pda, get_transaction_pda},
+    anchor_lang::AccountDeserialize,
+    client::{
+        self,
+        config_transaction_create,
+        config_transaction_execute,
+        multisig_create_v2,
+        proposal_approve,
+        proposal_cancel,
+        proposal_create,
+        ConfigTransactionCreateAccounts,
+        ConfigTransactionCreateArgs,
+        ConfigTransactionExecuteAccounts,
+        MultisigCreateAccountsV2,
+        MultisigCreateArgsV2,
+        ProposalCreateArgs,
+        ProposalVoteAccounts,
+        ProposalVoteArgs
+    },
+    pda::{
+        get_proposal_pda,
+        get_transaction_pda
+    },
     solana_client::nonblocking::rpc_client::RpcClient,
-    squads_multisig_program::{self, squads_multisig_program::proposal_reject, state::ProgramConfig, Multisig, SEED_TRANSACTION},
-    state::{ConfigAction, Member, Permission, Permissions, Proposal, ProposalStatus}
+    squads_multisig_program::{
+        self,
+        state::ProgramConfig,
+        Multisig
+    },
+    state::{
+        ConfigAction,
+        Member,
+        Permission,
+        Permissions,
+        Proposal,
+        ProposalStatus
+    }
 };
-
 use super::error::MultisigError;
 
 pub struct InvestorMultisigCreateArgs {
@@ -90,7 +127,7 @@ impl InvestorsMultisig {
 
     pub async fn get_current_proposal_status(&self) -> Result<ProposalStatus, MultisigError> {
         let program_id = squads_multisig_program::ID;
-        let transaction_index = self.get_multisig_transaction_index().await.unwrap();
+        let transaction_index = self.get_multisig_transaction_index().await?;
         let (proposal_pda, _) = get_proposal_pda(&self.multisig_pda, transaction_index, Some(&program_id));
 
         let proposal_config =
@@ -107,6 +144,18 @@ impl InvestorsMultisig {
         };
 
         Ok(proposal.status)
+    }
+
+    async fn get_transaction_from_instructions(&self, sender: Pubkey, instructions: &[Instruction]) -> Result<Transaction, MultisigError> {
+        let mut message = Message::new(instructions, Some(&sender));
+        let recent_blockhash =
+            match self.create_args.rpc_client.get_latest_blockhash().await {
+                Ok(hash) => hash,
+                Err(_) => return Err(MultisigError::ErrorOnGettingLatestBlockHash)
+            };
+        message.recent_blockhash = recent_blockhash;
+
+        Ok(Transaction::new_unsigned(message))
     }
 
     pub fn instruction_create_multisig(&self, members: &[Member], threshold: u16, time_lock: u32) -> Instruction {
@@ -145,15 +194,7 @@ impl InvestorsMultisig {
     pub async fn transaction_create_multisig(&self, members: &[Member], threshold: u16, time_lock: u32) -> Result<Transaction, MultisigError> {
         let instruction = self.instruction_create_multisig(members, threshold, time_lock);
 
-        let mut message = Message::new(&[instruction], Some(&self.create_args.creator));    //Creator.pubkey()));
-        let recent_blockhash =
-            match self.create_args.rpc_client.get_latest_blockhash().await {
-                Ok(hash) => hash,
-                Err(_) => return Err(MultisigError::ErrorOnGettingLatestBlockHash)
-            };
-        message.recent_blockhash = recent_blockhash;
-
-        Ok(Transaction::new_unsigned(message))
+        Ok(self.get_transaction_from_instructions(self.create_args.creator, &[instruction]).await?)
     }
 
     /// Creates a new config_transaction instruction to add member on behalf of adder.
@@ -265,57 +306,27 @@ impl InvestorsMultisig {
     pub async fn transaction_add_member_config_transaction(&self, adder: Pubkey, new_member: Member) -> Result<Transaction, MultisigError> {
         let ix = self.instructions_add_member_config_transaction(adder, new_member).await?;
 
-        let mut message = Message::new(&[ix], Some(&adder));
-        let recent_blockhash =
-            match self.create_args.rpc_client.get_latest_blockhash().await {
-                Ok(hash) => hash,
-                Err(_) => return Err(MultisigError::ErrorOnGettingLatestBlockHash)
-            };
-        message.recent_blockhash = recent_blockhash;
-
-        Ok(Transaction::new_unsigned(message))
+        Ok(self.get_transaction_from_instructions(adder, &[ix]).await?)
     }
 
     pub async fn transaction_proposal_create(&self, creator: Pubkey)  -> Result<Transaction, MultisigError> {
         let ix = self.instruction_proposal_create(creator).await?;
 
-        let mut message = Message::new(&[ix], Some(&creator));
-        let recent_blockhash =
-            match self.create_args.rpc_client.get_latest_blockhash().await {
-                Ok(hash) => hash,
-                Err(_) => return Err(MultisigError::ErrorOnGettingLatestBlockHash)
-            };
-        message.recent_blockhash = recent_blockhash;
+        Ok(self.get_transaction_from_instructions(creator, &[ix]).await?)
 
-        Ok(Transaction::new_unsigned(message))
     }
 
     pub async fn transaction_proposal_approve(&self, approver: Pubkey)  -> Result<Transaction, MultisigError> {
         let ix = self.instruction_proposal_approve(approver).await?;
 
-        let mut message = Message::new(&[ix], Some(&approver));
-        let recent_blockhash =
-            match self.create_args.rpc_client.get_latest_blockhash().await {
-                Ok(hash) => hash,
-                Err(_) => return Err(MultisigError::ErrorOnGettingLatestBlockHash)
-            };
-        message.recent_blockhash = recent_blockhash;
+        Ok(self.get_transaction_from_instructions(approver, &[ix]).await?)
 
-        Ok(Transaction::new_unsigned(message))
     }
 
     pub async fn transaction_proposal_cancel(&self, canceler: Pubkey) -> Result<Transaction, MultisigError> {
         let ix = self.instruction_proposal_cancel(canceler).await?;
 
-        let mut message = Message::new(&[ix], Some(&canceler));
-        let recent_blockhash =
-            match self.create_args.rpc_client.get_latest_blockhash().await {
-                Ok(hash) => hash,
-                Err(_) => return Err(MultisigError::ErrorOnGettingLatestBlockHash)
-            };
-        message.recent_blockhash = recent_blockhash;
-
-        Ok(Transaction::new_unsigned(message))
+        Ok(self.get_transaction_from_instructions(canceler, &[ix]).await?)
     }
 
     pub async fn transaction_config_transaction_execute(&self, executer: Pubkey) -> Result<Instruction, MultisigError> {
