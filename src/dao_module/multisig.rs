@@ -167,7 +167,7 @@ impl InvestorsMultisig {
         };
 
         if !members.contains(&creator) {
-            members.insert(0, creator);
+            members.push(creator);
         }
 
         multisig_create_v2(
@@ -329,26 +329,10 @@ impl InvestorsMultisig {
         Ok(self.get_transaction_from_instructions(canceler, &[ix]).await?)
     }
 
-    pub async fn transaction_config_transaction_execute(&self, executer: Pubkey) -> Result<Instruction, MultisigError> {
-        let program_id: Pubkey = squads_multisig_program::ID;
-        let transaction_index = self.get_multisig_transaction_index().await?;
-        let (proposal_pda, _) = get_proposal_pda(&self.multisig_pda, transaction_index, Some(&program_id));
-        let (transaction_pda, _) = get_transaction_pda(&self.multisig_pda, transaction_index, Some(&program_id));
+    pub async fn transaction_config_transaction_execute(&self, executer: Pubkey) -> Result<Transaction, MultisigError> {
+        let ix = self.instruction_config_transaction_execute(executer).await?;
 
-        let add_member_proposal_execute_instruction = config_transaction_execute(
-            ConfigTransactionExecuteAccounts {
-                multisig: self.multisig_pda,
-                member: executer,
-                proposal: proposal_pda,
-                transaction: transaction_pda,
-                rent_payer: Some(executer),
-                system_program: Some(system_program::ID),
-            },
-            vec![],
-            Some(program_id)
-        );
-
-        Ok(add_member_proposal_execute_instruction)
+        Ok(self.get_transaction_from_instructions(executer, &[ix]).await?)
     }
 
     pub async fn instruction_change_threshold_config_transaction(&self, changer: Pubkey, new_threshold: u16) -> Result<Instruction, MultisigError> {
