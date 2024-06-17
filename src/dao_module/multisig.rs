@@ -1,7 +1,12 @@
-use std::{fmt::format, ops::Mul};
-
 use solana_sdk::{
-        instruction::Instruction, lamports, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction, system_program, transaction::Transaction
+        instruction::Instruction,
+        message::Message,
+        pubkey::Pubkey,
+        signature::Keypair,
+        signer::Signer,
+        system_instruction,
+        system_program,
+        transaction::Transaction
     };
 use squads_multisig::{
     anchor_lang::AccountDeserialize,
