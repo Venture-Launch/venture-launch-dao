@@ -28,11 +28,17 @@ mod tests {
         message.recent_blockhash = recent_blockhash;
 
         let mut transaction = Transaction::new_unsigned(message);
-        let _ = transaction.try_sign(&[&creator, &create_key], recent_blockhash);
+        let _ = transaction_sign_and_send(&mut transaction, &[&create_key, &creator], &multisig.create_args.rpc_client).await.unwrap();
 
-        let _ = rpc_client.send_and_confirm_transaction(&transaction).await.unwrap();
 
         Ok(multisig)
+    }
+
+    pub async fn transaction_sign_and_send(tx: &mut Transaction, keys: &[&Keypair], multisig_rpc: &RpcClient) -> Result<(), Box<dyn Error>> {
+        let recent_blockhash = multisig_rpc.get_latest_blockhash().await.unwrap();
+        let _ = tx.try_sign(keys, recent_blockhash);
+        let _ = multisig_rpc.send_and_confirm_transaction(tx).await?;
+        Ok(())
     }
 
     pub async fn airdrop(rpc_client: &RpcClient, address: &Pubkey, amount: u64) -> Result<Signature, Box<dyn Error>> {
@@ -69,7 +75,6 @@ mod tests {
 
         let create_key = Keypair::new();
         let creator = Keypair::new();
-        let member = Keypair::new();
 
         let _ = airdrop(&rpc_client, &creator.pubkey(), 2).await;
 
@@ -86,9 +91,7 @@ mod tests {
         message.recent_blockhash = recent_blockhash;
 
         let mut transaction = Transaction::new_unsigned(message);
-        let _ = transaction.try_sign(&[&creator, &create_key], recent_blockhash);
-
-        let _ = rpc_client.send_and_confirm_transaction(&transaction).await?;
+        let _ = transaction_sign_and_send(&mut transaction, &[&create_key, &creator], &multisig.create_args.rpc_client).await.unwrap();
 
         Ok(())
     }
@@ -99,7 +102,6 @@ mod tests {
 
         let create_key = Keypair::new();
         let creator = Keypair::new();
-        let member = Keypair::new();
 
         let _ = airdrop(&rpc_client, &creator.pubkey(), 2).await;
 
@@ -110,11 +112,7 @@ mod tests {
         }).await?;
 
         let mut tx: Transaction = multisig.transaction_create_multisig(&[], 1, 0).await.unwrap();
-
-        let recent_blockhash = rpc_client.get_latest_blockhash().await.unwrap();
-        let _ = tx.try_sign(&[&creator, &create_key], recent_blockhash);
-
-        let _ = rpc_client.send_and_confirm_transaction(&tx).await?;
+        let _ = transaction_sign_and_send(&mut tx, &[&create_key, &creator], &multisig.create_args.rpc_client).await.unwrap();
 
         Ok(())
     }
@@ -142,10 +140,7 @@ mod tests {
             }
         ], 1, 0).await.unwrap();
 
-        let recent_blockhash = rpc_client.get_latest_blockhash().await.unwrap();
-        let _ = tx.try_sign(&[&creator, &create_key], recent_blockhash);
-
-        let _ = rpc_client.send_and_confirm_transaction(&tx).await?;
+        let _ = transaction_sign_and_send(&mut tx, &[&create_key, &creator], &multisig.create_args.rpc_client).await.unwrap();
 
         let members = multisig.get_multisig_members().await?;
 
@@ -168,32 +163,71 @@ mod tests {
 
         let multisig = get_multisig_no_members(rpc_client, create_key.insecure_clone(), creator.insecure_clone()).await.unwrap();
 
-        let mut tx = multisig.transaction_add_member_config_transaction(creator.pubkey(), new_member).await.unwrap();
-        let recent_blockhash = multisig.create_args.rpc_client.get_latest_blockhash().await.unwrap();
-        let _ = tx.try_sign(&[&creator], recent_blockhash);
-        let _ = multisig.create_args.rpc_client.send_and_confirm_transaction(&tx).await?;
+        let mut tx = multisig.transaction_add_member(creator.pubkey(), new_member).await.unwrap();
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
 
         let mut tx = multisig.transaction_proposal_create(creator.pubkey()).await.unwrap();
-        let recent_blockhash = multisig.create_args.rpc_client.get_latest_blockhash().await.unwrap();
-        let _ = tx.try_sign(&[&creator], recent_blockhash);
-        let _ = multisig.create_args.rpc_client.send_and_confirm_transaction(&tx).await?;
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
 
         let mut tx = multisig.transaction_proposal_approve(creator.pubkey()).await.unwrap();
-        let recent_blockhash = multisig.create_args.rpc_client.get_latest_blockhash().await.unwrap();
-        let _ = tx.try_sign(&[&creator], recent_blockhash);
-        let _ = multisig.create_args.rpc_client.send_and_confirm_transaction(&tx).await?;
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
 
         let members: Vec<Member> = multisig.get_multisig_members().await?;
         assert_eq!(1, members.len());
 
         let mut tx = multisig.transaction_config_transaction_execute(creator.pubkey()).await.unwrap();
-        let recent_blockhash = multisig.create_args.rpc_client.get_latest_blockhash().await.unwrap();
-        let _ = tx.try_sign(&[&creator], recent_blockhash);
-        let _ = multisig.create_args.rpc_client.send_and_confirm_transaction(&tx).await?;
-
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
 
         let members: Vec<Member> = multisig.get_multisig_members().await?;
         assert_eq!(2, members.len());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn change_threshold_to_multisig() -> Result<(), Box<dyn Error>> {
+        let rpc_client = RpcClient::new(String::from("http://127.0.0.1:8899"));
+
+        let create_key = Keypair::new();
+        let creator = Keypair::new();
+
+        let multisig = get_multisig_no_members(rpc_client, create_key.insecure_clone(), creator.insecure_clone()).await.unwrap();
+
+        let new_member = Keypair::new();
+
+        let new_member = Member {
+            key: new_member.pubkey(),
+            permissions: Permissions::from_vec(&[Permission::Vote, Permission::Initiate])
+        };
+
+        let mut tx = multisig.transaction_add_member(creator.pubkey(), new_member).await.unwrap();
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
+
+        let mut tx = multisig.transaction_proposal_create(creator.pubkey()).await.unwrap();
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
+
+        let mut tx = multisig.transaction_proposal_approve(creator.pubkey()).await.unwrap();
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
+
+        let mut tx = multisig.transaction_config_transaction_execute(creator.pubkey()).await.unwrap();
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
+
+// change threshold
+        let mut tx = multisig.transaction_change_threshold(creator.pubkey(), 2).await.unwrap();
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
+
+        let mut tx = multisig.transaction_proposal_create(creator.pubkey()).await.unwrap();
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
+
+        let mut tx = multisig.transaction_proposal_approve(creator.pubkey()).await.unwrap();
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
+
+        assert_eq!(1, multisig.get_threshold().await.unwrap());
+
+        let mut tx = multisig.transaction_config_transaction_execute(creator.pubkey()).await.unwrap();
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
+
+        assert_eq!(2, multisig.get_threshold().await.unwrap());
 
         Ok(())
     }

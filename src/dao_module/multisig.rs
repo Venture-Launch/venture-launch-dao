@@ -91,7 +91,7 @@ impl InvestorsMultisig {
         })
     }
 
-    pub async fn get_multisig_transaction_index(&self) -> Result<u64, MultisigError> {
+    pub async fn get_multisig(&self) -> Result<Multisig, MultisigError> {
         let multisig_config =
         match self.create_args.rpc_client.get_account(&self.multisig_pda).await{
             Ok(account) => account,
@@ -104,25 +104,32 @@ impl InvestorsMultisig {
             Ok(a) => a,
             Err(_) => return Err(MultisigError::FailedToDeserializeMultisigConfigData)
         };
+
+        Ok(multisig)
+    }
+
+    pub async fn get_multisig_transaction_index(&self) -> Result<u64, MultisigError> {
+        let multisig = self.get_multisig().await?;
 
         Ok(multisig.transaction_index)
     }
 
     pub async fn get_multisig_members(&self) -> Result<Vec<Member>, MultisigError> {
-        let multisig_config =
-        match self.create_args.rpc_client.get_account(&self.multisig_pda).await{
-            Ok(account) => account,
-            Err(_) => return Err(MultisigError::FailedToFetchMultisigConfigAccount)
-        };
-
-        let mut multisig_config_data = multisig_config.data.as_slice();
-        let multisig =
-        match Multisig::try_deserialize(&mut multisig_config_data) {
-            Ok(a) => a,
-            Err(_) => return Err(MultisigError::FailedToDeserializeMultisigConfigData)
-        };
+        let multisig = self.get_multisig().await?;
 
         Ok(multisig.members)
+    }
+
+    pub async fn get_threshold(&self) -> Result<u16, MultisigError> {
+        let multisig = self.get_multisig().await?;
+
+        Ok(multisig.threshold)
+    }
+
+    pub async fn is_member(&self, member_pubkey: Pubkey) -> Result<bool, MultisigError> {
+        let multisig = self.get_multisig().await?;
+
+        Ok(multisig.is_member(member_pubkey).is_some())
     }
 
     pub async fn get_current_proposal_status(&self) -> Result<ProposalStatus, MultisigError> {
@@ -198,7 +205,7 @@ impl InvestorsMultisig {
     }
 
     /// Creates a new config_transaction instruction to add member on behalf of adder.
-    pub async fn instructions_add_member_config_transaction(&self, adder: Pubkey, new_member: Member) -> Result<Instruction, MultisigError> {
+    pub async fn instructions_add_member(&self, adder: Pubkey, new_member: Member) -> Result<Instruction, MultisigError> {
         let program_id: Pubkey = squads_multisig_program::ID;
         let transaction_index = self.get_multisig_transaction_index().await? + 1;
         let (transaction_pda, _) = get_transaction_pda(&self.multisig_pda, transaction_index, Some(&program_id));
@@ -219,6 +226,29 @@ impl InvestorsMultisig {
         );
 
         Ok(add_member_ix)
+    }
+
+    pub async fn instructions_remove_member(&self, remover: Pubkey, old_member_pubkey: Pubkey) -> Result<Instruction, MultisigError> {
+        let program_id: Pubkey = squads_multisig_program::ID;
+        let transaction_index = self.get_multisig_transaction_index().await? + 1;
+        let (transaction_pda, _) = get_transaction_pda(&self.multisig_pda, transaction_index, Some(&program_id));
+
+        let remove_member_ix = config_transaction_create(
+            ConfigTransactionCreateAccounts {
+                multisig: self.multisig_pda,
+                transaction: transaction_pda,
+                creator: remover,
+                rent_payer: remover,
+                system_program: system_program::ID
+            }
+            , ConfigTransactionCreateArgs{
+                memo: Some(format!("Remove {} member from multisig {}", old_member_pubkey.to_string(), self.multisig_pda)),
+                actions: vec![ConfigAction::RemoveMember { old_member: old_member_pubkey }]
+            },
+            Some(program_id)
+        );
+
+        Ok(remove_member_ix)
     }
 
     pub async fn instruction_proposal_create(&self, creator: Pubkey)  -> Result<Instruction, MultisigError> {
@@ -303,10 +333,16 @@ impl InvestorsMultisig {
     }
 
      /// Creates a new config transaction to add member on behalf of adder.
-    pub async fn transaction_add_member_config_transaction(&self, adder: Pubkey, new_member: Member) -> Result<Transaction, MultisigError> {
-        let ix = self.instructions_add_member_config_transaction(adder, new_member).await?;
+    pub async fn transaction_add_member(&self, adder: Pubkey, new_member: Member) -> Result<Transaction, MultisigError> {
+        let ix = self.instructions_add_member(adder, new_member).await?;
 
         Ok(self.get_transaction_from_instructions(adder, &[ix]).await?)
+    }
+
+    pub async fn transaction_remove_member(&self, remover: Pubkey, old_member_pubkey: Pubkey) -> Result<Transaction, MultisigError> {
+        let ix = self.instructions_remove_member(remover, old_member_pubkey).await?;
+
+        Ok(self.get_transaction_from_instructions(remover, &[ix]).await?)
     }
 
     pub async fn transaction_proposal_create(&self, creator: Pubkey)  -> Result<Transaction, MultisigError> {
@@ -335,7 +371,7 @@ impl InvestorsMultisig {
         Ok(self.get_transaction_from_instructions(executer, &[ix]).await?)
     }
 
-    pub async fn instruction_change_threshold_config_transaction(&self, changer: Pubkey, new_threshold: u16) -> Result<Instruction, MultisigError> {
+    pub async fn instruction_change_threshold(&self, changer: Pubkey, new_threshold: u16) -> Result<Instruction, MultisigError> {
         let program_id: Pubkey = squads_multisig_program::ID;
         let transaction_index = self.get_multisig_transaction_index().await? + 1;
         let (transaction_pda, _) = get_transaction_pda(&self.multisig_pda, transaction_index, Some(&program_id));
@@ -349,12 +385,18 @@ impl InvestorsMultisig {
                 system_program: system_program::ID
             }
             , ConfigTransactionCreateArgs{
-                memo: Some(format!("Changing threshold to {} multisig {}", new_threshold, self.multisig_pda)),
-                actions: vec![ConfigAction::ChangeThreshold { new_threshold}]
+                memo: Some(format!("Changing threshold to {} on multisig {}", new_threshold, self.multisig_pda)),
+                actions: vec![ConfigAction::ChangeThreshold { new_threshold }]
             },
             Some(program_id)
         );
 
         Ok(change_threshold_ix)
+    }
+
+    pub async fn transaction_change_threshold(&self, changer: Pubkey, new_threshold: u16) -> Result<Transaction, MultisigError> {
+        let ix = self.instruction_change_threshold(changer, new_threshold).await?;
+
+        Ok(self.get_transaction_from_instructions(changer, &[ix]).await?)
     }
 }
