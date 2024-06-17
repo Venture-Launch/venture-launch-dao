@@ -1,30 +1,12 @@
+use std::{fmt::format, ops::Mul};
+
 use solana_sdk::{
-        instruction::Instruction,
-        message::Message,
-        pubkey::Pubkey,
-        signature::Keypair,
-        signer::Signer,
-        system_program,
-        transaction::Transaction
+        instruction::Instruction, lamports, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction, system_program, transaction::Transaction
     };
 use squads_multisig::{
     anchor_lang::AccountDeserialize,
     client::{
-        self,
-        config_transaction_create,
-        config_transaction_execute,
-        multisig_create_v2,
-        proposal_approve,
-        proposal_cancel,
-        proposal_create,
-        ConfigTransactionCreateAccounts,
-        ConfigTransactionCreateArgs,
-        ConfigTransactionExecuteAccounts,
-        MultisigCreateAccountsV2,
-        MultisigCreateArgsV2,
-        ProposalCreateArgs,
-        ProposalVoteAccounts,
-        ProposalVoteArgs
+        self, config_transaction_create, config_transaction_execute, multisig_create_v2, proposal_approve, proposal_cancel, proposal_create, vault_transaction_create, vault_transaction_execute, ConfigTransactionCreateAccounts, ConfigTransactionCreateArgs, ConfigTransactionExecuteAccounts, MultisigCreateAccountsV2, MultisigCreateArgsV2, ProposalCreateArgs, ProposalVoteAccounts, ProposalVoteArgs, VaultTransactionCreateAccounts, VaultTransactionExecuteAccounts
     },
     pda::{
         get_proposal_pda,
@@ -42,8 +24,8 @@ use squads_multisig::{
         Permission,
         Permissions,
         Proposal,
-        ProposalStatus
-    }
+        ProposalStatus, TransactionMessage
+    }, vault_transaction::VaultTransactionMessageExt
 };
 use super::error::MultisigError;
 
@@ -251,6 +233,36 @@ impl InvestorsMultisig {
         Ok(remove_member_ix)
     }
 
+    pub async fn instruction_transfer_from_vault(&self, sender: Pubkey, receiver: Pubkey, lamports: u64) -> Result<Instruction, MultisigError> {
+        let program_id: Pubkey = squads_multisig_program::ID;
+        let transaction_index = self.get_multisig_transaction_index().await? + 1;
+        let (transaction_pda, _) = get_transaction_pda(&self.multisig_pda, transaction_index, Some(&program_id));
+        let vault_index = 0;
+
+        let message = TransactionMessage::try_compile(
+            &self.vault_pda,
+            &[system_instruction::transfer(&self.vault_pda, &receiver, lamports)],
+            &[]
+        ).unwrap();
+
+        let transfer_from_vault_ix = vault_transaction_create(
+            VaultTransactionCreateAccounts {
+                multisig: self.multisig_pda,
+                transaction: transaction_pda,
+                creator: sender,
+                rent_payer: sender,
+                system_program: system_program::id(),
+            },
+            vault_index,
+            0,
+            &message,
+            Some(format!("Sending {lamports} lamports from {} to {}", self.vault_pda.to_string(), receiver.to_string())),
+            Some(program_id),
+        );
+
+        Ok(transfer_from_vault_ix)
+    }
+
     pub async fn instruction_proposal_create(&self, creator: Pubkey)  -> Result<Instruction, MultisigError> {
         let program_id: Pubkey = squads_multisig_program::ID;
         let transaction_index = self.get_multisig_transaction_index().await?;
@@ -332,6 +344,39 @@ impl InvestorsMultisig {
         Ok(config_transaction_execute_ix)
     }
 
+    pub async fn instruction_vault_transaction_execute(&self, sender: Pubkey, receiver: Pubkey, lamports: u64) -> Result<Instruction, MultisigError> {
+        let program_id: Pubkey = squads_multisig_program::ID;
+        let transaction_index = self.get_multisig_transaction_index().await?;
+        let (transaction_pda, _) = get_transaction_pda(&self.multisig_pda, transaction_index, Some(&program_id));
+        let (proposal_pda, _) = get_proposal_pda(&self.multisig_pda, transaction_index, Some(&program_id));
+        let vault_index = 0;
+
+        let message = TransactionMessage::try_compile(
+            &self.vault_pda,
+            &[system_instruction::transfer(&self.vault_pda, &receiver, lamports)],
+            &[]
+        ).unwrap();
+
+        let vault_transaction_execute_ix = vault_transaction_execute(
+            VaultTransactionExecuteAccounts {
+                multisig: self.multisig_pda,
+                transaction: transaction_pda,
+                member: sender,
+                proposal: proposal_pda,
+            },
+            vault_index,
+            0,
+            &message,
+            &[],
+            Some(program_id),
+        );
+
+        match vault_transaction_execute_ix {
+            Ok(ix) => Ok(ix),
+            Err(_) => Err(MultisigError::FailedToBuildVaultTransactionExecuteInstruction)
+        }
+    }
+
      /// Creates a new config transaction to add member on behalf of adder.
     pub async fn transaction_add_member(&self, adder: Pubkey, new_member: Member) -> Result<Transaction, MultisigError> {
         let ix = self.instructions_add_member(adder, new_member).await?;
@@ -343,6 +388,12 @@ impl InvestorsMultisig {
         let ix = self.instructions_remove_member(remover, old_member_pubkey).await?;
 
         Ok(self.get_transaction_from_instructions(remover, &[ix]).await?)
+    }
+
+    pub async fn transaction_transfer_from_vault(&self, sender: Pubkey, receiver: Pubkey, lamports: u64) -> Result<Transaction, MultisigError> {
+        let ix = self.instruction_transfer_from_vault(sender, receiver, lamports).await?;
+
+        Ok(self.get_transaction_from_instructions(sender, &[ix]).await?)
     }
 
     pub async fn transaction_proposal_create(&self, creator: Pubkey)  -> Result<Transaction, MultisigError> {
@@ -369,6 +420,12 @@ impl InvestorsMultisig {
         let ix = self.instruction_config_transaction_execute(executer).await?;
 
         Ok(self.get_transaction_from_instructions(executer, &[ix]).await?)
+    }
+
+    pub async fn transaction_vault_transaction_execute(&self, sender: Pubkey, receiver: Pubkey, lamports: u64) -> Result<Transaction, MultisigError> {
+        let ix = self.instruction_vault_transaction_execute(sender, receiver, lamports).await?;
+
+        Ok(self.get_transaction_from_instructions(sender, &[ix]).await?)
     }
 
     pub async fn instruction_change_threshold(&self, changer: Pubkey, new_threshold: u16) -> Result<Instruction, MultisigError> {

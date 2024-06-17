@@ -16,7 +16,7 @@ mod tests {
         let _ = airdrop(&rpc_client, &creator.pubkey(), 2).await;
 
         let multisig = InvestorsMultisig::new(InvestorMultisigCreateArgs {
-            rpc_client: RpcClient::new(String::from("http://127.0.0.1:8899")),
+            rpc_client,
             multisig_create_keypair: create_key.insecure_clone(),
             creator: creator.pubkey()
         }).await?;
@@ -24,7 +24,7 @@ mod tests {
         let ix = multisig.instruction_create_multisig(&[], 1, 0);
 
         let mut message = Message::new(&[ix], Some(&creator.pubkey()));    //Creator.pubkey()));
-        let recent_blockhash = rpc_client.get_latest_blockhash().await.unwrap();
+        let recent_blockhash = multisig.create_args.rpc_client.get_latest_blockhash().await.unwrap();
         message.recent_blockhash = recent_blockhash;
 
         let mut transaction = Transaction::new_unsigned(message);
@@ -228,6 +228,44 @@ mod tests {
         let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
 
         assert_eq!(2, multisig.get_threshold().await.unwrap());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn transfer_from_vault() -> Result<(), Box<dyn Error>> {
+        let rpc_client = RpcClient::new(String::from("http://127.0.0.1:8899"));
+
+        let create_key = Keypair::new();
+        let creator = Keypair::new();
+
+        let multisig = get_multisig_no_members(rpc_client, create_key.insecure_clone(), creator.insecure_clone()).await.unwrap();
+
+        let vault_balance = multisig.create_args.rpc_client.get_balance(&multisig.vault_pda).await?;
+        assert_eq!(0, vault_balance);
+
+        let _ = airdrop(&multisig.create_args.rpc_client, &multisig.vault_pda, 3).await?;
+
+        let vault_balance = multisig.create_args.rpc_client.get_balance(&multisig.vault_pda).await?;
+        assert_eq!(3 * LAMPORTS_PER_SOL, vault_balance);
+
+        let mut tx = multisig.transaction_transfer_from_vault(creator.pubkey(), creator.pubkey(), 1 * LAMPORTS_PER_SOL).await.unwrap();
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
+
+        let mut tx = multisig.transaction_proposal_create(creator.pubkey()).await.unwrap();
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
+
+        let mut tx = multisig.transaction_proposal_approve(creator.pubkey()).await.unwrap();
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
+
+        let mut tx = multisig.transaction_vault_transaction_execute(creator.pubkey(), creator.pubkey(), 1 * LAMPORTS_PER_SOL).await.unwrap();
+        let _ = transaction_sign_and_send(&mut tx, &[&creator], &multisig.create_args.rpc_client).await.unwrap();
+
+        let vault_balance = multisig.create_args.rpc_client.get_balance(&multisig.vault_pda).await?;
+        assert_eq!(2 * LAMPORTS_PER_SOL, vault_balance);
+
+        let creator_balance = multisig.create_args.rpc_client.get_balance(&multisig.vault_pda).await?;
+        assert!(creator_balance > 1 * LAMPORTS_PER_SOL);
 
         Ok(())
     }

@@ -18,6 +18,8 @@ pub enum MultisigError {
     FailedToDeserializeProgramConfigData,
     #[error("Failed to deserialize proposal config account")]
     FailedToDeserializeProposalConfigData,
+    #[error("Failed to build vault_transaction_execute instruction")]
+    FailedToBuildVaultTransactionExecuteInstruction,
     #[error("Error on getting latest block hash")]
     ErrorOnGettingLatestBlockHash
 }
