@@ -1,0 +1,3 @@
+[submodule "venture_launch_contract"]
+	path = venture_launch_contract
+	url = https://github.com/Web3-NaUKMA/VentureLaunch.git

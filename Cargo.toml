@@ -14,6 +14,12 @@ tokio = {version = "1.38.0", features = ["full"]}
 amiquip = "0.4.2"
 dotenv = "0.15.0"
 
+solana-client = "1.18.16"
+solana-sdk = "1.18.16"
+spl-token = "4.0.0"
+crypto_tracker = { path = "venture_launch_contract" }
+
+
 [dependencies.uuid]
 version = "1.3.1"
 features = [
