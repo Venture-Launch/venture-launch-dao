@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use solana_sdk::{
     program_pack::Pack, pubkey::Pubkey, signature::{Keypair, Signer}, signer::EncodableKey
 };
@@ -5,15 +7,15 @@ use solana_client::rpc_client::RpcClient;
 use std::str::FromStr;
 use dotenv::dotenv;
 
-use venture_launch_dao::contract_module::{
+use crate::contract_module::{
     venture_launch::VentureLaunch,
     associated_token,
 };
 
 use crypto_tracker::state::CryptoTracker;
 
-
-fn main() {
+#[test]
+fn contract_module_test() {
     dotenv().ok();
     let native_mint = spl_token::native_mint::id();
 
@@ -31,11 +33,11 @@ fn main() {
 
 
     // Create & deposit to native ATA
-    println!("Creating ATA...");
-    associated_token::native::create_native_sol_ata(&vl.rpc_client, &payer);
-    println!("ATA created, depositing...");
-    associated_token::native::deposit_to_wrapped_sol_ata(&vl.rpc_client, &payer, 100 * 10_u64.pow(9));
-    println!("ATA deposited");
+    // println!("Creating ATA...");
+    // associated_token::native::create_native_sol_ata(&vl.rpc_client, &payer);
+    // println!("ATA created, depositing...");
+    // associated_token::native::deposit_to_wrapped_sol_ata(&vl.rpc_client, &payer, 100 * 10_u64.pow(9));
+    // println!("ATA deposited");
 
     // Contract initialization transaction
     println!("Invoking create_vault...");
@@ -50,7 +52,7 @@ fn main() {
     let signature = vl.invoke_deposit(
         &payer,
         &associated_token::utils::get_associated_token_address(&native_mint, &payer.pubkey()),
-        18 * 10_u64.pow(9)
+        2 * 10_u64.pow(9)
     ).unwrap();
 
     println!("[deposit] Signature: {:?}", signature);
@@ -60,7 +62,7 @@ fn main() {
     let signature = vl.invoke_withdraw(
         &payer,
         &associated_token::utils::get_associated_token_address(&native_mint, &payer.pubkey()),
-        2 * 10_u64.pow(9)
+        4 * 10_u64.pow(9)
     ).unwrap();
 
     println!("[withdraw] Signature: {:?}", signature);

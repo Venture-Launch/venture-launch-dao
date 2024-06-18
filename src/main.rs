@@ -1,4 +1,7 @@
-use venture_launch_dao::amqp::consumer::Consumer;
+pub mod amqp;
+pub mod contract_module;
+
+use amqp::consumer::Consumer;
 use dotenv::dotenv;
 
 fn main() {
