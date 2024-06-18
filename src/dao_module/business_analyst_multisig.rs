@@ -1,63 +1,89 @@
+use async_trait::async_trait;
 use solana_sdk::{
-        instruction::Instruction,
-        message::Message,
-        pubkey::Pubkey,
-        signature::Keypair,
-        signer::Signer,
-        system_instruction,
-        system_program,
-        transaction::Transaction
-    };
-use squads_multisig::{
-    anchor_lang::AccountDeserialize,
-    client::{
-        self, config_transaction_create, config_transaction_execute, multisig_create_v2, proposal_approve, proposal_cancel, proposal_create, vault_transaction_create, vault_transaction_execute, ConfigTransactionCreateAccounts, ConfigTransactionCreateArgs, ConfigTransactionExecuteAccounts, MultisigCreateAccountsV2, MultisigCreateArgsV2, ProposalCreateArgs, ProposalVoteAccounts, ProposalVoteArgs, VaultTransactionCreateAccounts, VaultTransactionExecuteAccounts
-    },
-    pda::{
-        get_proposal_pda,
-        get_transaction_pda
-    },
-    solana_client::nonblocking::rpc_client::RpcClient,
-    squads_multisig_program::{
-        self,
-        state::ProgramConfig,
-        Multisig
-    },
-    state::{
-        ConfigAction,
-        Member,
-        Permission,
-        Permissions,
-        Proposal,
-        ProposalStatus, TransactionMessage
-    }, vault_transaction::VaultTransactionMessageExt
+    instruction::Instruction,
+    message::Message,
+    pubkey::Pubkey,
+    signature::Keypair,
+    signer::Signer,
+    system_instruction,
+    system_program,
+    transaction::Transaction
 };
-use super::error::MultisigError;
+use squads_multisig::{
+anchor_lang::AccountDeserialize,
+client::{
+    self,
+    config_transaction_create,
+    config_transaction_execute,
+    multisig_create_v2,
+    proposal_create,
+    vault_transaction_create,
+    vault_transaction_execute,
+    ConfigTransactionCreateAccounts,
+    ConfigTransactionCreateArgs,
+    ConfigTransactionExecuteAccounts,
+    MultisigCreateAccountsV2,
+    MultisigCreateArgsV2,
+    ProposalCreateArgs,
+    VaultTransactionCreateAccounts,
+    VaultTransactionExecuteAccounts
+},
+pda::{
+    get_multisig_pda,
+    get_program_config_pda,
+    get_proposal_pda,
+    get_transaction_pda,
+    get_vault_pda
+},
+solana_client::nonblocking::rpc_client::RpcClient,
+squads_multisig_program::{
+    self,
+    state::ProgramConfig,
+    Multisig
+},
+state::{
+    ConfigAction,
+    Member,
+    Permission,
+    Permissions,
+    Proposal,
+    ProposalStatus, TransactionMessage
+}, vault_transaction::VaultTransactionMessageExt
+};
+use super::error::BusinessAnalystMultisigError;
+use super::base_multisig::BaseMultisig;
 
-pub struct InvestorMultisigCreateArgs {
+pub struct BusinessAnalystMultisigCreateArgs {
     pub rpc_client: RpcClient,
     pub multisig_create_keypair: Keypair,
     pub creator: Pubkey
 }
-pub struct InvestorsMultisig {
-    pub create_args: InvestorMultisigCreateArgs,
+
+pub struct BusinessAnalystMultisig {
+    pub rpc_client: RpcClient,
+    pub multisig_create_keypair: Keypair,
+    pub creator: Pubkey,
     pub multisig_pda: Pubkey,
     pub vault_pda: Pubkey,
     pub program_config_pda: Pubkey,
     pub treasury: Pubkey
 }
 
-impl InvestorsMultisig {
-    pub async fn new(create_args: InvestorMultisigCreateArgs) -> Result<Self, MultisigError> {
+#[async_trait]
+impl BaseMultisig<BusinessAnalystMultisigCreateArgs> for BusinessAnalystMultisig {
+    type Error = BusinessAnalystMultisigError;
+
+    async fn new(args: BusinessAnalystMultisigCreateArgs) -> Result<Self, Self::Error>
+    {
         let program_id = squads_multisig_program::ID;
 
-        let (multisig_pda, _) = squads_multisig::pda::get_multisig_pda(&create_args.multisig_create_keypair.pubkey(), Some(&program_id));
-        let (vault_pda, _) = squads_multisig::pda::get_vault_pda(&multisig_pda, 0, Some(&program_id));
-        let (program_config_pda, _) = squads_multisig::pda::get_program_config_pda(Some(&program_id));
+        let (multisig_pda, _)       = get_multisig_pda(&args.multisig_create_keypair.pubkey(), Some(&program_id));
+        let (vault_pda, _)          = get_vault_pda(&multisig_pda, 0, Some(&program_id));
+        let (program_config_pda, _) = get_program_config_pda(Some(&program_id));
 
-        let program_config =  match create_args.rpc_client.get_account(&program_config_pda).await {
+        let program_config =  match args.rpc_client.get_account(&program_config_pda).await {
             Ok(account) => account,
-            Err(_) => return Err(MultisigError::FailedToFetchProgramConfigAccount)
+            Err(_) => return Err(BusinessAnalystMultisigError::FailedToFetchProgramConfigAccount)
         };
 
         let mut program_config_data = program_config.data.as_slice();
@@ -65,12 +91,14 @@ impl InvestorsMultisig {
         let treasury =
         match ProgramConfig::try_deserialize(&mut program_config_data) {
             Ok(config) => config,
-            Err(_) => return Err(MultisigError::FailedToDeserializeProgramConfigData)
+            Err(_) => return Err(BusinessAnalystMultisigError::FailedToDeserializeProgramConfigData)
         }
         .treasury;
 
-        Ok(InvestorsMultisig {
-            create_args,
+        Ok(BusinessAnalystMultisig {
+            rpc_client: args.rpc_client,
+            multisig_create_keypair: args.multisig_create_keypair,
+            creator: args.creator,
             multisig_pda,
             vault_pda,
             program_config_pda,
@@ -78,86 +106,71 @@ impl InvestorsMultisig {
         })
     }
 
-    pub async fn get_multisig(&self) -> Result<Multisig, MultisigError> {
+    fn get_multisig_create_args(&self) -> BusinessAnalystMultisigCreateArgs {
+        BusinessAnalystMultisigCreateArgs {
+            rpc_client: RpcClient::new(self.rpc_client.url()),
+            multisig_create_keypair: self.multisig_create_keypair.insecure_clone(),
+            creator: self.creator.clone()
+        }
+    }
+
+    async fn get_multisig(&self)                      -> Result<Multisig, Self::Error>{
         let multisig_config =
-        match self.create_args.rpc_client.get_account(&self.multisig_pda).await{
+        match self.rpc_client.get_account(&self.multisig_pda).await{
             Ok(account) => account,
-            Err(_) => return Err(MultisigError::FailedToFetchMultisigConfigAccount)
+            Err(_) => return Err(BusinessAnalystMultisigError::FailedToFetchMultisigConfigAccount)
         };
 
         let mut multisig_config_data = multisig_config.data.as_slice();
         let multisig =
         match Multisig::try_deserialize(&mut multisig_config_data) {
             Ok(a) => a,
-            Err(_) => return Err(MultisigError::FailedToDeserializeMultisigConfigData)
+            Err(_) => return Err(BusinessAnalystMultisigError::FailedToDeserializeMultisigConfigData)
         };
 
         Ok(multisig)
     }
 
-    pub async fn get_multisig_transaction_index(&self) -> Result<u64, MultisigError> {
-        let multisig = self.get_multisig().await?;
-
-        Ok(multisig.transaction_index)
-    }
-
-    pub async fn get_multisig_members(&self) -> Result<Vec<Member>, MultisigError> {
-        let multisig = self.get_multisig().await?;
-
-        Ok(multisig.members)
-    }
-
-    pub async fn get_threshold(&self) -> Result<u16, MultisigError> {
-        let multisig = self.get_multisig().await?;
-
-        Ok(multisig.threshold)
-    }
-
-    pub async fn is_member(&self, member_pubkey: Pubkey) -> Result<bool, MultisigError> {
-        let multisig = self.get_multisig().await?;
-
-        Ok(multisig.is_member(member_pubkey).is_some())
-    }
-
-    pub async fn get_current_proposal_status(&self) -> Result<ProposalStatus, MultisigError> {
+    async fn get_current_proposal_status(&self)       -> Result<ProposalStatus, Self::Error>{
         let program_id = squads_multisig_program::ID;
         let transaction_index = self.get_multisig_transaction_index().await?;
         let (proposal_pda, _) = get_proposal_pda(&self.multisig_pda, transaction_index, Some(&program_id));
 
         let proposal_config =
-        match self.create_args.rpc_client.get_account(&proposal_pda).await{
+        match self.rpc_client.get_account(&proposal_pda).await{
             Ok(account) => account,
-            Err(_) => return Err(MultisigError::FailedToFetchProposalConfigAccount)
+            Err(_) => return Err(BusinessAnalystMultisigError::FailedToFetchProposalConfigAccount)
         };
 
         let mut proposal_config_data = proposal_config.data.as_slice();
         let proposal =
         match Proposal::try_deserialize(&mut proposal_config_data) {
             Ok(a) => a,
-            Err(_) => return Err(MultisigError::FailedToDeserializeProposalConfigData)
+            Err(_) => return Err(BusinessAnalystMultisigError::FailedToDeserializeProposalConfigData)
         };
 
         Ok(proposal.status)
     }
 
-    async fn get_transaction_from_instructions(&self, sender: Pubkey, instructions: &[Instruction]) -> Result<Transaction, MultisigError> {
+    async fn get_transaction_from_instructions(&self, sender: Pubkey, instructions: &[Instruction]) -> Result<Transaction, Self::Error> {
         let mut message = Message::new(instructions, Some(&sender));
         let recent_blockhash =
-            match self.create_args.rpc_client.get_latest_blockhash().await {
+            match self.rpc_client.get_latest_blockhash().await {
                 Ok(hash) => hash,
-                Err(_) => return Err(MultisigError::ErrorOnGettingLatestBlockHash)
+                Err(_) => return Err(BusinessAnalystMultisigError::ErrorOnGettingLatestBlockHash)
             };
         message.recent_blockhash = recent_blockhash;
 
         Ok(Transaction::new_unsigned(message))
     }
+}
 
+impl BusinessAnalystMultisig {
     pub fn instruction_create_multisig(&self, members: &[Member], threshold: u16, time_lock: u32) -> Instruction {
-
         let mut members: Vec<Member> = members.to_vec();
         let creator = Member {
-            key: self.create_args.creator,
-            permissions: Permissions::from_vec(&[Permission::Initiate, Permission::Vote, Permission::Execute]),
+            key: self.creator,
+            permissions: Permissions::from_vec(&[Permission::Initiate, Permission::Execute]),
         };
 
         if !members.contains(&creator) {
@@ -169,8 +182,8 @@ impl InvestorsMultisig {
                 program_config: self.program_config_pda,
                 treasury: self.treasury,
                 multisig: self.multisig_pda,
-                create_key: self.create_args.multisig_create_keypair.pubkey(),
-                creator: self.create_args.creator,
+                create_key: self.multisig_create_keypair.pubkey(),
+                creator: self.creator,
                 system_program: system_program::ID,
             },
             MultisigCreateArgsV2 {
@@ -185,14 +198,14 @@ impl InvestorsMultisig {
         )
     }
 
-    pub async fn transaction_create_multisig(&self, members: &[Member], threshold: u16, time_lock: u32) -> Result<Transaction, MultisigError> {
+    pub async fn transaction_create_multisig(&self, members: &[Member], threshold: u16, time_lock: u32) -> Result<Transaction, BusinessAnalystMultisigError> {
         let instruction = self.instruction_create_multisig(members, threshold, time_lock);
 
-        Ok(self.get_transaction_from_instructions(self.create_args.creator, &[instruction]).await?)
+        Ok(self.get_transaction_from_instructions(self.creator, &[instruction]).await?)
     }
 
-    /// Creates a new config_transaction instruction to add member on behalf of adder.
-    pub async fn instructions_add_member(&self, adder: Pubkey, new_member: Member) -> Result<Instruction, MultisigError> {
+    // Creates a new config_transaction instruction to add member on behalf of adder.
+    pub async fn instructions_add_member(&self, adder: Pubkey, new_member: Member) -> Result<Instruction, BusinessAnalystMultisigError> {
         let program_id: Pubkey = squads_multisig_program::ID;
         let transaction_index = self.get_multisig_transaction_index().await? + 1;
         let (transaction_pda, _) = get_transaction_pda(&self.multisig_pda, transaction_index, Some(&program_id));
@@ -215,7 +228,7 @@ impl InvestorsMultisig {
         Ok(add_member_ix)
     }
 
-    pub async fn instructions_remove_member(&self, remover: Pubkey, old_member_pubkey: Pubkey) -> Result<Instruction, MultisigError> {
+    pub async fn instructions_remove_member(&self, remover: Pubkey, old_member_pubkey: Pubkey) -> Result<Instruction, BusinessAnalystMultisigError> {
         let program_id: Pubkey = squads_multisig_program::ID;
         let transaction_index = self.get_multisig_transaction_index().await? + 1;
         let (transaction_pda, _) = get_transaction_pda(&self.multisig_pda, transaction_index, Some(&program_id));
@@ -238,7 +251,7 @@ impl InvestorsMultisig {
         Ok(remove_member_ix)
     }
 
-    pub async fn instruction_transfer_from_vault(&self, sender: Pubkey, receiver: Pubkey, lamports: u64) -> Result<Instruction, MultisigError> {
+    pub async fn instruction_transfer_from_vault(&self, sender: Pubkey, receiver: Pubkey, lamports: u64) -> Result<Instruction, BusinessAnalystMultisigError> {
         let program_id: Pubkey = squads_multisig_program::ID;
         let transaction_index = self.get_multisig_transaction_index().await? + 1;
         let (transaction_pda, _) = get_transaction_pda(&self.multisig_pda, transaction_index, Some(&program_id));
@@ -268,7 +281,7 @@ impl InvestorsMultisig {
         Ok(transfer_from_vault_ix)
     }
 
-    pub async fn instruction_proposal_create(&self, creator: Pubkey)  -> Result<Instruction, MultisigError> {
+    pub async fn instruction_proposal_create(&self, creator: Pubkey)  -> Result<Instruction, BusinessAnalystMultisigError> {
         let program_id: Pubkey = squads_multisig_program::ID;
         let transaction_index = self.get_multisig_transaction_index().await?;
         let (proposal_pda, _) = get_proposal_pda(&self.multisig_pda, transaction_index, Some(&program_id));
@@ -291,43 +304,7 @@ impl InvestorsMultisig {
         Ok(proposal_create_ix)
     }
 
-    pub async fn instruction_proposal_approve(&self, approver: Pubkey)  -> Result<Instruction, MultisigError> {
-        let program_id: Pubkey = squads_multisig_program::ID;
-        let transaction_index = self.get_multisig_transaction_index().await?;
-        let (proposal_pda, _) = get_proposal_pda(&self.multisig_pda, transaction_index, Some(&program_id));
-
-        let proposal_approve_ix = proposal_approve(
-            ProposalVoteAccounts {
-                multisig: self.multisig_pda,
-                member: approver,
-                proposal: proposal_pda
-            },
-            ProposalVoteArgs { memo: None },
-            Some(program_id)
-        );
-
-        Ok(proposal_approve_ix)
-    }
-
-    pub async fn instruction_proposal_cancel(&self, canceler: Pubkey) -> Result<Instruction, MultisigError> {
-        let program_id: Pubkey = squads_multisig_program::ID;
-        let transaction_index = self.get_multisig_transaction_index().await? + 1;
-        let (proposal_pda, _) = get_proposal_pda(&self.multisig_pda, transaction_index, Some(&program_id));
-
-        let proposal_cancel_ix = proposal_cancel(
-            ProposalVoteAccounts {
-                multisig: self.multisig_pda,
-                member: canceler,
-                proposal: proposal_pda
-            },
-            ProposalVoteArgs { memo: None },
-            Some(program_id)
-        );
-
-        Ok(proposal_cancel_ix)
-    }
-
-    pub async fn instruction_config_transaction_execute(&self, executer: Pubkey) -> Result<Instruction, MultisigError> {
+    pub async fn instruction_config_transaction_execute(&self, executer: Pubkey) -> Result<Instruction, BusinessAnalystMultisigError> {
         let program_id: Pubkey = squads_multisig_program::ID;
         let transaction_index = self.get_multisig_transaction_index().await?;
         let (proposal_pda, _) = get_proposal_pda(&self.multisig_pda, transaction_index, Some(&program_id));
@@ -349,7 +326,7 @@ impl InvestorsMultisig {
         Ok(config_transaction_execute_ix)
     }
 
-    pub async fn instruction_vault_transaction_execute(&self, sender: Pubkey, receiver: Pubkey, lamports: u64) -> Result<Instruction, MultisigError> {
+    pub async fn instruction_vault_transaction_execute(&self, sender: Pubkey, receiver: Pubkey, lamports: u64) -> Result<Instruction, BusinessAnalystMultisigError> {
         let program_id: Pubkey = squads_multisig_program::ID;
         let transaction_index = self.get_multisig_transaction_index().await?;
         let (transaction_pda, _) = get_transaction_pda(&self.multisig_pda, transaction_index, Some(&program_id));
@@ -378,62 +355,48 @@ impl InvestorsMultisig {
 
         match vault_transaction_execute_ix {
             Ok(ix) => Ok(ix),
-            Err(_) => Err(MultisigError::FailedToBuildVaultTransactionExecuteInstruction)
+            Err(_) => Err(BusinessAnalystMultisigError::FailedToBuildVaultTransactionExecuteInstruction)
         }
     }
 
      /// Creates a new config transaction to add member on behalf of adder.
-    pub async fn transaction_add_member(&self, adder: Pubkey, new_member: Member) -> Result<Transaction, MultisigError> {
+    pub async fn transaction_add_member(&self, adder: Pubkey, new_member: Member) -> Result<Transaction, BusinessAnalystMultisigError> {
         let ix = self.instructions_add_member(adder, new_member).await?;
 
         Ok(self.get_transaction_from_instructions(adder, &[ix]).await?)
     }
 
-    pub async fn transaction_remove_member(&self, remover: Pubkey, old_member_pubkey: Pubkey) -> Result<Transaction, MultisigError> {
+    pub async fn transaction_remove_member(&self, remover: Pubkey, old_member_pubkey: Pubkey) -> Result<Transaction, BusinessAnalystMultisigError> {
         let ix = self.instructions_remove_member(remover, old_member_pubkey).await?;
 
         Ok(self.get_transaction_from_instructions(remover, &[ix]).await?)
     }
 
-    pub async fn transaction_transfer_from_vault(&self, sender: Pubkey, receiver: Pubkey, lamports: u64) -> Result<Transaction, MultisigError> {
+    pub async fn transaction_transfer_from_vault(&self, sender: Pubkey, receiver: Pubkey, lamports: u64) -> Result<Transaction, BusinessAnalystMultisigError> {
         let ix = self.instruction_transfer_from_vault(sender, receiver, lamports).await?;
 
         Ok(self.get_transaction_from_instructions(sender, &[ix]).await?)
     }
 
-    pub async fn transaction_proposal_create(&self, creator: Pubkey)  -> Result<Transaction, MultisigError> {
+    pub async fn transaction_proposal_create(&self, creator: Pubkey)  -> Result<Transaction, BusinessAnalystMultisigError> {
         let ix = self.instruction_proposal_create(creator).await?;
 
         Ok(self.get_transaction_from_instructions(creator, &[ix]).await?)
-
     }
 
-    pub async fn transaction_proposal_approve(&self, approver: Pubkey)  -> Result<Transaction, MultisigError> {
-        let ix = self.instruction_proposal_approve(approver).await?;
-
-        Ok(self.get_transaction_from_instructions(approver, &[ix]).await?)
-
-    }
-
-    pub async fn transaction_proposal_cancel(&self, canceler: Pubkey) -> Result<Transaction, MultisigError> {
-        let ix = self.instruction_proposal_cancel(canceler).await?;
-
-        Ok(self.get_transaction_from_instructions(canceler, &[ix]).await?)
-    }
-
-    pub async fn transaction_config_transaction_execute(&self, executer: Pubkey) -> Result<Transaction, MultisigError> {
+    pub async fn transaction_config_transaction_execute(&self, executer: Pubkey) -> Result<Transaction, BusinessAnalystMultisigError> {
         let ix = self.instruction_config_transaction_execute(executer).await?;
 
         Ok(self.get_transaction_from_instructions(executer, &[ix]).await?)
     }
 
-    pub async fn transaction_vault_transaction_execute(&self, sender: Pubkey, receiver: Pubkey, lamports: u64) -> Result<Transaction, MultisigError> {
+    pub async fn transaction_vault_transaction_execute(&self, sender: Pubkey, receiver: Pubkey, lamports: u64) -> Result<Transaction, BusinessAnalystMultisigError> {
         let ix = self.instruction_vault_transaction_execute(sender, receiver, lamports).await?;
 
         Ok(self.get_transaction_from_instructions(sender, &[ix]).await?)
     }
 
-    pub async fn instruction_change_threshold(&self, changer: Pubkey, new_threshold: u16) -> Result<Instruction, MultisigError> {
+    pub async fn instruction_change_threshold(&self, changer: Pubkey, new_threshold: u16) -> Result<Instruction, BusinessAnalystMultisigError> {
         let program_id: Pubkey = squads_multisig_program::ID;
         let transaction_index = self.get_multisig_transaction_index().await? + 1;
         let (transaction_pda, _) = get_transaction_pda(&self.multisig_pda, transaction_index, Some(&program_id));
@@ -456,7 +419,7 @@ impl InvestorsMultisig {
         Ok(change_threshold_ix)
     }
 
-    pub async fn transaction_change_threshold(&self, changer: Pubkey, new_threshold: u16) -> Result<Transaction, MultisigError> {
+    pub async fn transaction_change_threshold(&self, changer: Pubkey, new_threshold: u16) -> Result<Transaction, BusinessAnalystMultisigError> {
         let ix = self.instruction_change_threshold(changer, new_threshold).await?;
 
         Ok(self.get_transaction_from_instructions(changer, &[ix]).await?)
