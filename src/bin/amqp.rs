@@ -1,5 +1,4 @@
-mod amqp;
-use amqp::consumer::Consumer;
+use venture_launch_dao::amqp::consumer::Consumer;
 use dotenv::dotenv;
 
 fn main() {
