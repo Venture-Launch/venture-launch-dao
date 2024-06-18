@@ -16,7 +16,9 @@ pub enum InvestorMultisigError {
     #[error("Failed to deserialize proposal config account")]
     FailedToDeserializeProposalConfigData,
     #[error("Error on getting latest block hash")]
-    ErrorOnGettingLatestBlockHash
+    ErrorOnGettingLatestBlockHash,
+    #[error("Proposal status is not Approved")]
+    ProposalStatusIsNotApproved
 }
 
 impl From<InvestorMultisigError> for ProgramError {
@@ -42,7 +44,9 @@ pub enum BusinessAnalystMultisigError {
     #[error("Failed to build vault_transaction_execute instruction")]
     FailedToBuildVaultTransactionExecuteInstruction,
     #[error("Error on getting latest block hash")]
-    ErrorOnGettingLatestBlockHash
+    ErrorOnGettingLatestBlockHash,
+    #[error("Proposal status is not Approved")]
+    ProposalStatusIsNotApproved
 }
 
 impl From<BusinessAnalystMultisigError> for ProgramError {
