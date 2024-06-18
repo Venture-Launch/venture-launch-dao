@@ -16,6 +16,7 @@ dotenv = "0.15.0"
 solana-client = "1.18.16"
 spl-token = "4.0.0"
 crypto_tracker = { path = "venture_launch_contract" }
+async-trait = "0.1.80"
 
 
 [dependencies.uuid]
