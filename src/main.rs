@@ -1,5 +1,6 @@
 pub mod amqp;
 pub mod contract_module;
+pub mod dao_module;
 
 use amqp::consumer::Consumer;
 use dotenv::dotenv;
