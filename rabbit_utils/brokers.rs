@@ -1,4 +1,5 @@
 use amiquip::{Connection, ConsumerMessage, ConsumerOptions, QueueDeclareOptions};
+use tracing::info;
 
 pub struct Consumer<'a> {
     url: &'a str,
@@ -24,13 +25,32 @@ impl Consumer<'_> {
             .expect("Unable to open channel");
 
         let queue = channel
-            .queue_declare(self.queue_name, QueueDeclareOptions::default())
-            .expect("Failed to create queue");
+            .queue_declare(
+                self.queue_name,
+                QueueDeclareOptions {
+                    durable: true, // Set to true if the queue is durable, otherwise set to false.
+                    exclusive: false,
+                    auto_delete: false,
+                    arguments: Default::default(),
+                },
+            )
+            .map_err(|e| eprintln!("Failed to declare queue: {}", e))
+            .expect("Unable to create queue!");
 
-        // Start a consumer.
+        let binding = channel
+            .queue_bind("queue", "queue", "hello", Default::default())
+            .expect("test");
+
+        info!(?binding, "binding");
         let consumer = queue
             .consume(ConsumerOptions::default())
-            .expect("Failed to connect to create consumer");
+            .map_err(|e| eprintln!("Failed to start consumer: {}", e))
+            .expect("Unable to create consumer!");
+
+        // // Start a consumer.
+        // let consumer = queue
+        //     .consume(ConsumerOptions::default())
+        //     c.expect("Failed to connect to create consumer");
         println!("Waiting for messages. Press Ctrl-C to exit.");
 
         for (i, message) in consumer.receiver().iter().enumerate() {
