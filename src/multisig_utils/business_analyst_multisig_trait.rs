@@ -5,8 +5,7 @@ use super::{
 };
 use async_trait::async_trait;
 use solana_sdk::{
-    instruction::Instruction, pubkey::Pubkey, signer::Signer, system_instruction, system_program,
-    transaction::Transaction,
+    instruction::Instruction, pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction, system_program, transaction::Transaction
 };
 use squads_multisig::{
     client::{
@@ -31,12 +30,14 @@ pub trait BusinessAnalystMultisigTrait<Args = BaseMultisigCreateArgs>:
         members: &[Member],
         threshold: u16,
         time_lock: u32,
+        multisig_create_keypair: &Keypair
     ) -> Instruction;
     async fn transaction_create_multisig(
         &self,
         members: &[Member],
         threshold: u16,
         time_lock: u32,
+        multisig_create_keypair: &Keypair
     ) -> Result<Transaction, Self::Error>;
 
     async fn instructions_add_member(
@@ -170,8 +171,9 @@ impl BusinessAnalystMultisigTrait<BaseMultisigCreateArgs> for BaseMultisig {
         members: &[Member],
         threshold: u16,
         time_lock: u32,
+        multisig_create_keypair: &Keypair
     ) -> Result<Transaction, Self::Error> {
-        let instruction = self.instruction_create_multisig(members, threshold, time_lock);
+        let instruction = self.instruction_create_multisig(members, threshold, time_lock, multisig_create_keypair);
 
         Ok(self
             .get_transaction_from_instructions(self.creator, &[instruction])
@@ -183,6 +185,7 @@ impl BusinessAnalystMultisigTrait<BaseMultisigCreateArgs> for BaseMultisig {
         members: &[Member],
         threshold: u16,
         time_lock: u32,
+        multisig_create_keypair: &Keypair
     ) -> Instruction {
         let mut members: Vec<Member> = members.to_vec();
         let creator = Member {
@@ -203,7 +206,7 @@ impl BusinessAnalystMultisigTrait<BaseMultisigCreateArgs> for BaseMultisig {
                 program_config: self.program_config_pda,
                 treasury: self.treasury,
                 multisig: self.multisig_pda,
-                create_key: self.multisig_create_keypair.pubkey(),
+                create_key: multisig_create_keypair.pubkey(),
                 creator: self.creator,
                 system_program: system_program::ID,
             },
@@ -467,7 +470,7 @@ impl BusinessAnalystMultisigTrait<BaseMultisigCreateArgs> for BaseMultisig {
 mod tests {
     use std::{error::Error, sync::Arc};
 
-    use crate::dao_module::error::BaseMultisigError;
+    use crate::multisig_utils::error::BaseMultisigError;
 
     use super::*;
     use solana_client::nonblocking::rpc_client::RpcClient;
@@ -492,7 +495,7 @@ mod tests {
         rpc_client: &RpcClient,
         multisig_create_keypair: &Keypair,
         creator: &Keypair,
-        members: &[Member],
+        members: &[Member]
     ) -> Result<BaseMultisig, BaseMultisigError> {
         let result = BaseMultisig::new(BaseMultisigCreateArgs {
             rpc_client: RpcClient::new(rpc_client.url()),
@@ -501,7 +504,7 @@ mod tests {
         })
         .await?;
 
-        let mut tx = result.transaction_create_multisig(members, 1, 0).await?;
+        let mut tx = result.transaction_create_multisig(members, 1, 0, multisig_create_keypair).await?;
         let _ =
             transaction_sign_and_send(&mut tx, &[&creator, &multisig_create_keypair], rpc_client)
                 .await

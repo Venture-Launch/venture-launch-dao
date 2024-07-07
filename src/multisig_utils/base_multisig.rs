@@ -10,9 +10,15 @@ pub struct BaseMultisigCreateArgs {
     pub creator: Pubkey
 }
 
+pub struct BaseMultisigInitArgs {
+    pub rpc_client: RpcClient,
+    pub multisig_pda: Pubkey,
+    pub creator: Pubkey
+}
+
 pub struct BaseMultisig {
     pub rpc_client: RpcClient,
-    pub multisig_create_keypair: Keypair,
+    pub multisig_create_keypair: Option<Keypair>,
     pub creator: Pubkey,
     pub multisig_pda: Pubkey,
     pub vault_pda: Pubkey,

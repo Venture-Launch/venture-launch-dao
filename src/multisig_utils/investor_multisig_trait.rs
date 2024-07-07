@@ -16,7 +16,7 @@ impl InvestorMultisigTrait<BaseMultisigCreateArgs> for BaseMultisig {
 mod tests {
     use std::{error::Error, sync::Arc};
 
-    use crate::dao_module::{business_analyst_multisig_trait::BusinessAnalystMultisigTrait, error::BaseMultisigError};
+    use crate::multisig_utils::{business_analyst_multisig_trait::BusinessAnalystMultisigTrait, error::BaseMultisigError};
 
     use super::*;
     use solana_client::nonblocking::rpc_client::RpcClient;
@@ -39,7 +39,7 @@ mod tests {
             creator: creator.pubkey().clone()
         }).await?;
 
-        let mut tx = result.transaction_create_multisig(members, 1, 0).await?;
+        let mut tx = result.transaction_create_multisig(members, 1, 0, multisig_create_keypair).await?;
         let _ = transaction_sign_and_send(&mut tx, &[&creator, &multisig_create_keypair], rpc_client).await.unwrap();
 
         Ok(result)

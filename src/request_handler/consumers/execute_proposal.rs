@@ -3,8 +3,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 pub struct ProposalExecuteDaoSchema {
-    project_id: String,
-    is_vault: bool
+    project_id: String
 }
 
 pub async fn consume(request: ProposalExecuteDaoSchema) -> Result<String, String> {

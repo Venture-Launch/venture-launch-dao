@@ -3,13 +3,13 @@ use solana_sdk::{
     instruction::Instruction, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer, transaction::Transaction
 };
 use squads_multisig::{
-    anchor_lang::AccountDeserialize, client::{proposal_approve, proposal_cancel, ProposalVoteAccounts, ProposalVoteArgs}, pda::{get_multisig_pda, get_program_config_pda, get_proposal_pda, get_vault_pda}, squads_multisig_program::{self, state::ProgramConfig, Multisig}, state::{
+    anchor_lang::{AccountDeserialize, Key}, client::{proposal_approve, proposal_cancel, ProposalVoteAccounts, ProposalVoteArgs}, pda::{get_multisig_pda, get_program_config_pda, get_proposal_pda, get_vault_pda}, squads_multisig_program::{self, state::ProgramConfig, Multisig}, state::{
         Member, Proposal, ProposalStatus
     }
 };
 use async_trait::async_trait;
 
-use super::{base_multisig::{BaseMultisig, BaseMultisigCreateArgs}, error::BaseMultisigError};
+use super::{base_multisig::{BaseMultisig, BaseMultisigCreateArgs, BaseMultisigInitArgs}, error::BaseMultisigError};
 
 #[async_trait]
 pub trait BaseMultisigTrait<Args>: Send + Sync {
@@ -17,8 +17,9 @@ pub trait BaseMultisigTrait<Args>: Send + Sync {
 
     async fn new(args: Args) -> Result<Self, Self::Error>
     where Self: Sized;
+    async fn from_multisig_pda(args: BaseMultisigInitArgs) -> Result<Self, Self::Error>
+    where Self: Sized;
 
-    fn get_multisig_create_args(&self) -> Args;
     async fn get_multisig(&self)                      -> Result<Multisig,        Self::Error>;
     async fn get_multisig_members(&self)              -> Result<Vec<Member>,     Self::Error>{
         let multisig = self.get_multisig().await?;
@@ -46,7 +47,7 @@ pub trait BaseMultisigTrait<Args>: Send + Sync {
     fn get_vault_pda(&self) -> Pubkey;
     fn get_program_config_pda(&self) -> Pubkey;
     fn get_treasury(&self) -> Pubkey;
-    fn get_create_keypair(&self) -> &Keypair;
+    fn get_create_keypair(&self) -> &Option<Keypair>;
 
     async fn instruction_proposal_approve(&self, approver: Pubkey)  -> Result<Instruction, Self::Error>;
     async fn instruction_proposal_cancel(&self, canceler: Pubkey) -> Result<Instruction, Self::Error>;
@@ -86,7 +87,7 @@ impl BaseMultisigTrait<BaseMultisigCreateArgs> for BaseMultisig {
     fn get_treasury(&self) -> Pubkey {
         return self.treasury;
     }
-    fn get_create_keypair(&self) -> &Keypair{
+    fn get_create_keypair(&self) -> &Option<Keypair>{
         return &self.multisig_create_keypair;
     }
 
@@ -114,7 +115,7 @@ impl BaseMultisigTrait<BaseMultisigCreateArgs> for BaseMultisig {
 
         Ok(BaseMultisig {
             rpc_client: args.rpc_client,
-            multisig_create_keypair: args.multisig_create_keypair,
+            multisig_create_keypair: Some(args.multisig_create_keypair),
             creator: args.creator,
             multisig_pda,
             vault_pda,
@@ -123,12 +124,36 @@ impl BaseMultisigTrait<BaseMultisigCreateArgs> for BaseMultisig {
         })
     }
 
-    fn get_multisig_create_args(&self) -> BaseMultisigCreateArgs {
-        BaseMultisigCreateArgs {
-            rpc_client: RpcClient::new(self.rpc_client.url()),
-            multisig_create_keypair: self.multisig_create_keypair.insecure_clone(),
-            creator: self.creator.clone()
+    async fn from_multisig_pda(args: BaseMultisigInitArgs) -> Result<Self, Self::Error> {
+        let program_id = squads_multisig_program::ID;
+
+        let multisig_pda     = args.multisig_pda;
+        let (vault_pda, _)          = get_vault_pda(&multisig_pda, 0, Some(&program_id));
+        let (program_config_pda, _) = get_program_config_pda(Some(&program_id));
+
+        let program_config =  match args.rpc_client.get_account(&program_config_pda).await {
+            Ok(account) => account,
+            Err(_) => return Err(Self::Error::FailedToFetchProgramConfigAccount)
+        };
+
+        let mut program_config_data = program_config.data.as_slice();
+
+        let treasury =
+        match ProgramConfig::try_deserialize(&mut program_config_data) {
+            Ok(config) => config,
+            Err(_) => return Err(Self::Error::FailedToDeserializeProgramConfigData)
         }
+        .treasury;
+
+        Ok(BaseMultisig {
+            rpc_client: args.rpc_client,
+            multisig_create_keypair: None,
+            creator: args.creator,
+            multisig_pda,
+            vault_pda,
+            program_config_pda,
+            treasury
+        })
     }
 
     async fn get_multisig(&self) -> Result<Multisig, Self::Error>{
