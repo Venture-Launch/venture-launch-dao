@@ -1,16 +1,26 @@
-mod create_user;
-mod delete_user;
+mod create_dao;
+mod add_member;
+mod remove_member;
+mod change_threshold;
+mod vote;
+mod withdraw;
+mod execute_proposal;
 
 use amqp_serde::types::{FieldName, FieldValue};
 use amqprs::channel::{BasicAckArguments, Channel};
 use amqprs::consumer::AsyncConsumer;
 use amqprs::{BasicProperties, Deliver};
 use async_trait::async_trait;
+use change_threshold::ChangeThresholdDaoSchema;
+use execute_proposal::ProposalExecuteDaoSchema;
 use serde::Deserialize;
 use serde_json;
+use vote::VoteDaoSchema;
+use withdraw::WithdrawDaoSchema;
 
-use crate::request_handler::consumers::create_user::CreateUserSchema;
-use crate::request_handler::consumers::delete_user::DeleteUserSchema;
+use crate::request_handler::consumers::create_dao::CreateDaoSchema;
+use crate::request_handler::consumers::add_member::AddMemberDaoSchema;
+use crate::request_handler::consumers::remove_member::RemoveMemberDaoSchema;
 
 pub struct RabbitMQConsumer {}
 
@@ -27,19 +37,53 @@ fn load_schema<'a, T: Deserialize<'a>>(raw_json: &'a str) -> Result<T, String> {
     };
 }
 
+// mod create_dao;
+// mod add_member;
+// mod remove_member;
+// mod change_threshold;
+// mod vote;
+// mod withdraw;
+// mod execute_proposal;
+
 async fn run_consumer(consumer_name: &str, raw_json_schema: &str) -> Result<String, String> {
     return match consumer_name {
-        "create_user" => {
-            let json: CreateUserSchema = load_schema(raw_json_schema)?;
-
-            create_user::consume(json).await
-        }
-        "delete_user" => {
-            let json: DeleteUserSchema = load_schema(raw_json_schema)?;
-
-            delete_user::consume(json).await
-        }
+        "create_dao" => {
+            let json: CreateDaoSchema = load_schema(raw_json_schema)?;
+            println!("{:?}",raw_json_schema);
+            create_dao::consume(json).await
+        },
+        "add_member" => {
+            let json: AddMemberDaoSchema = load_schema(raw_json_schema)?;
+            println!("{:?}",raw_json_schema);
+            add_member::consume(json).await
+        },
+        "remove_member" => {
+            let json: RemoveMemberDaoSchema = load_schema(raw_json_schema)?;
+            println!("{:?}",raw_json_schema);
+            remove_member::consume(json).await
+        },
+        "change_threshold" => {
+            let json: ChangeThresholdDaoSchema = load_schema(raw_json_schema)?;
+            println!("{:?}",raw_json_schema);
+            change_threshold::consume(json).await
+        },
+        "vote" => {
+            let json: VoteDaoSchema = load_schema(raw_json_schema)?;
+            println!("{:?}",raw_json_schema);
+            vote::consume(json).await
+        },
+        "withdraw" => {
+            let json: WithdrawDaoSchema = load_schema(raw_json_schema)?;
+            println!("{:?}",raw_json_schema);
+            withdraw::consume(json).await
+        },
+        "execute_proposal" => {
+            let json: ProposalExecuteDaoSchema = load_schema(raw_json_schema)?;
+            println!("{:?}",raw_json_schema);
+            execute_proposal::consume(json).await
+        },
         unknown_command => Err(format!("Unknown command: {}", unknown_command)),
+
     };
 }
 
