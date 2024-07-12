@@ -37,6 +37,11 @@ async fn create_base_multisig(create_key: &Keypair) -> Result<BaseMultisig, Stri
 
     let creator_keypair = get_ba_keypair().await.unwrap();
 
+    // let _ = airdrop(&rpc_client, &creator_keypair.pubkey(), 5).await; // TODO: Delete debug code
+
+
+    println!("creator: {}", creator_keypair.pubkey());
+    println!("balance: {}", rpc_client.get_balance(&creator_keypair.pubkey()).await.unwrap());
     let multisig = BaseMultisig::new(BaseMultisigCreateArgs{
         rpc_client,
         multisig_create_keypair: create_key.insecure_clone(),
@@ -86,15 +91,18 @@ pub async fn airdrop(
 pub async fn create_dao(project_id: String) -> Result<String, String> {
     let create_key = Keypair::new();
     let creator_keypair = get_ba_keypair().await.unwrap();
+
     let multisig = create_base_multisig(&create_key).await.unwrap();
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
 
     let mut tx = multisig.transaction_create_multisig(&[], 1, 0, &create_key).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+    println!("before try_sign");
     let _ = tx.try_sign(&[&creator_keypair, &create_key], recent_blockhash);
     let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
-    // println!("sig: {}", sig);
+    println!("after confirm");
+    println!("multisig: {}", multisig.get_multisig_pda());
     dao_repository::create_dao();
 
     Ok(multisig.get_multisig_pda().to_string())

@@ -3,7 +3,7 @@ use solana_sdk::{
     instruction::Instruction, message::Message, pubkey::Pubkey, signature::Keypair, signer::Signer, transaction::Transaction
 };
 use squads_multisig::{
-    anchor_lang::{AccountDeserialize, Key}, client::{proposal_approve, proposal_cancel, ProposalVoteAccounts, ProposalVoteArgs}, pda::{get_multisig_pda, get_program_config_pda, get_proposal_pda, get_vault_pda}, squads_multisig_program::{self, state::ProgramConfig, Multisig}, state::{
+    anchor_lang::AccountDeserialize, client::{proposal_approve, proposal_cancel, ProposalVoteAccounts, ProposalVoteArgs}, pda::{get_multisig_pda, get_program_config_pda, get_proposal_pda, get_vault_pda}, squads_multisig_program::{self, state::ProgramConfig, Multisig}, state::{
         Member, Proposal, ProposalStatus
     }
 };

@@ -1,26 +1,44 @@
-use std::env;
+use dotenv::dotenv;
 use std::error::Error;
 use tokio;
+pub mod multisig_utils;
 pub mod dao_module;
 pub mod request_handler;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    dotenv().ok();
+
     let host = std::env::var("RABBIT_HOST").unwrap_or_else(|_| "localhost".into());
-    let queue = std::env::var("RESPONSE_QUEUE").unwrap_or_else(|_| "localhost".into());
+
+    let response_queue = std::env::var("RESPONSE_QUEUE").unwrap_or_else(|_| "response_queue".into());
+    let requesr_queue = std::env::var("REQUEST_QUEUE").unwrap_or_else(|_| "request_queue".into());
+
     let req_exchange: String =
-        std::env::var("REQUEST_EXCHANGE").unwrap_or_else(|_| "localhost".into());
+        std::env::var("REQUEST_EXCHANGE").unwrap_or_else(|_| "request_exchange".into());
+    let resp_exchange: String =
+        std::env::var("RESPONSE_EXCHANGE").unwrap_or_else(|_| "response_exchange".into());
     // let port = std::env::var("RABBIT_PORT").unwrap_or_else(|_| "localhost".into());
 
-    let rabbit_handle = request_handler::processor::start(
+    let rabbit_consume = request_handler::processor::start_consumer(
         host.as_str(),
         5672,
         "guest",
         "guest",
-        "request.rs".to_string(),
+        req_exchange,
         "request.consumer",
     );
-    let (rabbit_result) = tokio::join!(rabbit_handle);
+
+    let rabbit_publish    = request_handler::processor::start_publisher(
+        host.as_str(),
+        5672,
+        "guest",
+        "guest",
+        resp_exchange,
+        "response.consumer",
+    );
+
+    let _ = tokio::join!(rabbit_consume, rabbit_publish);
 
     // env_logger::init();
 

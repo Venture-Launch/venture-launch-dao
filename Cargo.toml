@@ -18,3 +18,5 @@ amqprs = "1.6.2"
 serde = { version = "1.0.203" }
 amqp_serde = "0.4.1"
 serde_json = "1.0.120"
+ed25519-dalek = "1.0.1"
+dotenv = "0.15.0"

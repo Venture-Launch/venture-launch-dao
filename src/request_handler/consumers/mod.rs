@@ -22,7 +22,10 @@ use crate::request_handler::consumers::create_dao::CreateDaoSchema;
 use crate::request_handler::consumers::add_member::AddMemberDaoSchema;
 use crate::request_handler::consumers::remove_member::RemoveMemberDaoSchema;
 
-pub struct RabbitMQConsumer {}
+use super::processor::RabbitMQPublisher;
+
+pub struct RabbitMQConsumer {
+}
 
 impl RabbitMQConsumer {
     pub fn new() -> RabbitMQConsumer {
@@ -48,42 +51,42 @@ fn load_schema<'a, T: Deserialize<'a>>(raw_json: &'a str) -> Result<T, String> {
 async fn run_consumer(consumer_name: &str, raw_json_schema: &str) -> Result<String, String> {
     return match consumer_name {
         "create_dao" => {
+            println!("creating dao");
             let json: CreateDaoSchema = load_schema(raw_json_schema)?;
-            println!("{:?}",raw_json_schema);
+            println!("{:?}",json);
             create_dao::consume(json).await
         },
         "add_member" => {
             let json: AddMemberDaoSchema = load_schema(raw_json_schema)?;
-            println!("{:?}",raw_json_schema);
+            println!("{:?}",json);
             add_member::consume(json).await
         },
         "remove_member" => {
             let json: RemoveMemberDaoSchema = load_schema(raw_json_schema)?;
-            println!("{:?}",raw_json_schema);
+            println!("{:?}",json);
             remove_member::consume(json).await
         },
         "change_threshold" => {
             let json: ChangeThresholdDaoSchema = load_schema(raw_json_schema)?;
-            println!("{:?}",raw_json_schema);
+            println!("{:?}",json);
             change_threshold::consume(json).await
         },
         "vote" => {
             let json: VoteDaoSchema = load_schema(raw_json_schema)?;
-            println!("{:?}",raw_json_schema);
+            println!("{:?}",json);
             vote::consume(json).await
         },
         "withdraw" => {
             let json: WithdrawDaoSchema = load_schema(raw_json_schema)?;
-            println!("{:?}",raw_json_schema);
+            println!("{:?}",json);
             withdraw::consume(json).await
         },
         "execute_proposal" => {
             let json: ProposalExecuteDaoSchema = load_schema(raw_json_schema)?;
-            println!("{:?}",raw_json_schema);
+            println!("{:?}",json);
             execute_proposal::consume(json).await
         },
         unknown_command => Err(format!("Unknown command: {}", unknown_command)),
-
     };
 }
 
@@ -133,10 +136,13 @@ impl AsyncConsumer for RabbitMQConsumer {
             }
         };
 
+        let publisher = RabbitMQPublisher::new("localhost", 5672, "guest", "guest").await.unwrap();
+
         let result: Result<String, String> = run_consumer(&command, raw_string).await;
 
         match result {
             Ok(success_message) => {
+                let _ = publisher.publish_message(&format!("{{\"msg\": \"{success_message}\"}}")).await;
                 println!(
                     "[{:?} RABBITMQ INFO] {}",
                     chrono::Utc::now(),
