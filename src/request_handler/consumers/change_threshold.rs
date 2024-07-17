@@ -3,15 +3,14 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 pub struct ChangeThresholdDaoSchema {
-    project_id: String,
+    multisig_pda: String,
     new_threshold: u16
 }
 
 pub async fn consume(request: ChangeThresholdDaoSchema) -> Result<String, String> {
-    let pda = dao_service::change_threshold(request.project_id.clone(), request.new_threshold).await.unwrap();
+    let pda = dao_service::change_threshold(request.multisig_pda.clone(), request.new_threshold).await.unwrap();
     return Ok(format!(
-        "Dao {}: {} created successfully",
-        request.project_id,
-        pda
+        "\"multisig_pda\": \"{}\",
+        \"new_threshold\": \"{}\"", request.multisig_pda, request.new_threshold
     ));
 }

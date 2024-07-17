@@ -3,15 +3,13 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 pub struct RemoveMemberDaoSchema {
-    project_id: String,
+    multisig_pda: String,
     pubkey: String
 }
 
 pub async fn consume(request: RemoveMemberDaoSchema) -> Result<String, String> {
-    let pda = dao_service::remove_member(request.project_id.clone(), request.pubkey).await.unwrap();
+    let pda = dao_service::remove_member(request.multisig_pda.clone(), request.pubkey).await.unwrap();
     return Ok(format!(
-        "Dao {}: {} created successfully",
-        request.project_id,
-        pda
+        "\"multisig_pda\": \"{}\"", request.multisig_pda
     ));
 }

@@ -3,16 +3,14 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 pub struct AddMemberDaoSchema {
-    project_id: String,
+    multisig_pda: String,
     pubkey: String,
     permissions: Vec<String>
 }
 
 pub async fn consume(request: AddMemberDaoSchema) -> Result<String, String> {
-    let pda = dao_service::add_member(request.project_id.clone(), request.pubkey, request.permissions).await.unwrap();
+    let pda = dao_service::add_member(request.multisig_pda.clone(), request.pubkey, request.permissions).await.unwrap();
     return Ok(format!(
-        "Dao {}: {} created successfully",
-        request.project_id,
-        pda
+        "\"multisig_pda\": \"{}\"", request.multisig_pda
     ));
 }

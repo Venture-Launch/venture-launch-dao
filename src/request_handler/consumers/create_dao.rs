@@ -7,11 +7,10 @@ pub struct CreateDaoSchema {
 }
 
 pub async fn consume(request: CreateDaoSchema) -> Result<String, String> {
-    let pda = dao_service::create_dao(request.project_id.clone()).await.unwrap();
+    let pda = dao_service::create_dao().await.unwrap();
 
     return Ok(format!(
-        "Dao {}: {} created successfully",
-        request.project_id,
-        pda
+        "{pda},
+        \"project_id\":  \"{}\"", request.project_id
     ));
 }

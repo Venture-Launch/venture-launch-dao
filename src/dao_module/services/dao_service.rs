@@ -5,7 +5,7 @@ use std::sync::Arc;
 use dotenv::dotenv;
 
 use ed25519_dalek::{PublicKey, SecretKey};
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::nonblocking::rpc_client::{self, RpcClient};
 use solana_sdk::native_token::LAMPORTS_PER_SOL;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
@@ -30,15 +30,15 @@ async fn get_ba_keypair() -> Result<Keypair, String> {
 
     Ok(creator_keypair)
 }
-async fn create_base_multisig(create_key: &Keypair) -> Result<BaseMultisig, String> {
+fn get_rpc_client() -> Result<RpcClient, String> {
     dotenv().ok();
 
-    let rpc_client = RpcClient::new(std::env::var("DEFAULT_RPC_CLIENT").unwrap_or_else(|_| "http://127.0.0.1:8899".into()).to_string());
+    Ok(RpcClient::new(std::env::var("DEFAULT_RPC_CLIENT").unwrap_or_else(|_| "http://127.0.0.1:8899".into()).to_string()))
+}
+async fn create_base_multisig(create_key: &Keypair) -> Result<BaseMultisig, String> {
 
-    let creator_keypair = get_ba_keypair().await.unwrap();
-
-    // let _ = airdrop(&rpc_client, &creator_keypair.pubkey(), 5).await; // TODO: Delete debug code
-
+    let rpc_client: RpcClient = get_rpc_client().unwrap();
+    let creator_keypair: Keypair = get_ba_keypair().await.unwrap();
 
     println!("creator: {}", creator_keypair.pubkey());
     println!("balance: {}", rpc_client.get_balance(&creator_keypair.pubkey()).await.unwrap());
@@ -54,7 +54,7 @@ async fn create_base_multisig(create_key: &Keypair) -> Result<BaseMultisig, Stri
 async fn get_base_multisig(multisig_pda: Pubkey) -> Result<BaseMultisig, String> {
     dotenv().ok();
 
-    let rpc_client = RpcClient::new(std::env::var("DEFAULT_RPC_CLIENT").unwrap_or_else(|_| "http://127.0.0.1:8899".into()).to_string());
+    let rpc_client: RpcClient = get_rpc_client().unwrap();
 
     let creator_keypair = get_ba_keypair().await.unwrap();
 
@@ -67,6 +67,8 @@ async fn get_base_multisig(multisig_pda: Pubkey) -> Result<BaseMultisig, String>
     Ok(multisig)
 }
 
+
+/// debug code, works only on localhost
 pub async fn airdrop(
     rpc_client: &RpcClient,
     address: &Pubkey,
@@ -88,7 +90,7 @@ pub async fn airdrop(
     Ok(sig)
 }
 
-pub async fn create_dao(project_id: String) -> Result<String, String> {
+pub async fn create_dao() -> Result<String, String> {
     let create_key = Keypair::new();
     let creator_keypair = get_ba_keypair().await.unwrap();
 
@@ -105,18 +107,21 @@ pub async fn create_dao(project_id: String) -> Result<String, String> {
     println!("multisig: {}", multisig.get_multisig_pda());
     dao_repository::create_dao();
 
-    Ok(multisig.get_multisig_pda().to_string())
+    Ok(format!(
+        "\"multisig_pda\": \"{}\",
+        \"vault_pda\":  \"{} \"", multisig.get_multisig_pda().to_string(), multisig.get_vault_pda().to_string()
+    ))
 }
 
 pub async fn add_member(
-    project_id: String,
+    multisig_pda: String,
     pubkey: String,
     permissions: Vec<String>
 ) -> Result<String, String>  {
     dotenv().ok();
 
     let creator_keypair = get_ba_keypair().await.unwrap();
-    let multisig_pda = Pubkey::from_str(&std::env::var("DEFAULT_DAO_PDA").unwrap_or_else(|_| "5MpijLXyybv5LQF48MN4LM7ppJFVUZWCug2TzKL4fKsr".into())).unwrap();
+    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();
     let multisig = get_base_multisig(multisig_pda).await.unwrap();
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
@@ -128,14 +133,13 @@ pub async fn add_member(
     };
 
     let ix_add_member = multisig.instructions_add_member(creator_keypair.pubkey(), new_member).await.unwrap();
-    let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
-    println!("pretransaction");
     let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_add_member]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let sig = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
     println!("sig: {}", sig);
 
+    let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
     let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
@@ -146,26 +150,25 @@ pub async fn add_member(
 }
 
 pub async fn remove_member(
-    project_id: String,
+    multisig_pda: String,
     pubkey: String
 ) -> Result<String, String>  {
     dotenv().ok();
 
     let creator_keypair = get_ba_keypair().await.unwrap();
-    let multisig_pda = Pubkey::from_str(&std::env::var("DEFAULT_DAO_PDA").unwrap_or_else(|_| "5MpijLXyybv5LQF48MN4LM7ppJFVUZWCug2TzKL4fKsr".into())).unwrap();
+    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();
     let multisig = get_base_multisig(multisig_pda).await.unwrap();
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
     let old_member = Pubkey::from_str(pubkey.as_str()).unwrap();
 
     let ix_remove_member = multisig.instructions_remove_member(creator_keypair.pubkey(), old_member).await.unwrap();
-    let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
-
     let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_remove_member]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
 
+    let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
     let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
@@ -176,25 +179,24 @@ pub async fn remove_member(
 }
 
 pub async fn change_threshold(
-    project_id: String,
+    multisig_pda: String,
     new_threshold: u16
 ) -> Result<String, String>  {
     dotenv().ok();
 
     let creator_keypair = get_ba_keypair().await.unwrap();
-    let multisig_pda = Pubkey::from_str(&std::env::var("DEFAULT_DAO_PDA").unwrap_or_else(|_| "5MpijLXyybv5LQF48MN4LM7ppJFVUZWCug2TzKL4fKsr".into())).unwrap();
+    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();
     let multisig = get_base_multisig(multisig_pda).await.unwrap();
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
 
     let ix_change_threshold = multisig.instruction_change_threshold(creator_keypair.pubkey(), new_threshold).await.unwrap();
-    let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
-
     let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_change_threshold]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
 
+    let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
     let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
@@ -204,12 +206,12 @@ pub async fn change_threshold(
 }
 
 pub async fn execute_proposal(
-    project_id: String
+    multisig_pda: String
 ) -> Result<String, String>  {
     dotenv().ok();
 
     let creator_keypair = get_ba_keypair().await.unwrap();
-    let multisig_pda = Pubkey::from_str(&std::env::var("DEFAULT_DAO_PDA").unwrap_or_else(|_| "5MpijLXyybv5LQF48MN4LM7ppJFVUZWCug2TzKL4fKsr".into())).unwrap();
+    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();
     let multisig = get_base_multisig(multisig_pda).await.unwrap();
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
@@ -223,14 +225,14 @@ pub async fn execute_proposal(
 }
 
 pub async fn vote(
-    project_id: String,
+    multisig_pda: String,
     voter: String,
     vote: String
 ) -> Result<String, String>  {
     dotenv().ok();
 
     let creator_keypair = get_ba_keypair().await.unwrap();
-    let multisig_pda = Pubkey::from_str(&std::env::var("DEFAULT_DAO_PDA").unwrap_or_else(|_| "5MpijLXyybv5LQF48MN4LM7ppJFVUZWCug2TzKL4fKsr".into())).unwrap();
+    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();
     let multisig = get_base_multisig(multisig_pda).await.unwrap();
 
     let voter = Pubkey::from_str(voter.as_str()).unwrap();
@@ -257,7 +259,7 @@ pub async fn vote(
 }
 
 pub async fn withdraw(
-    project_id: String,
+    multisig_pda: String,
     is_execute: bool,
     receiver: String,
     amount: u64
@@ -265,7 +267,7 @@ pub async fn withdraw(
     dotenv().ok();
 
     let creator_keypair = get_ba_keypair().await.unwrap();
-    let multisig_pda = Pubkey::from_str(&std::env::var("DEFAULT_DAO_PDA").unwrap_or_else(|_| "5MpijLXyybv5LQF48MN4LM7ppJFVUZWCug2TzKL4fKsr".into())).unwrap();
+    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();
     let multisig = get_base_multisig(multisig_pda).await.unwrap();
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);

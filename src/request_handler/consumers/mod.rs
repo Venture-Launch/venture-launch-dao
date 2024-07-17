@@ -12,13 +12,14 @@ use amqprs::consumer::AsyncConsumer;
 use amqprs::{BasicProperties, Deliver};
 use async_trait::async_trait;
 use change_threshold::ChangeThresholdDaoSchema;
+use create_dao::CreateDaoSchema;
 use execute_proposal::ProposalExecuteDaoSchema;
 use serde::Deserialize;
 use serde_json;
 use vote::VoteDaoSchema;
 use withdraw::WithdrawDaoSchema;
 
-use crate::request_handler::consumers::create_dao::CreateDaoSchema;
+// use crate::request_handler::consumers::create_dao::CreateDaoSchema;
 use crate::request_handler::consumers::add_member::AddMemberDaoSchema;
 use crate::request_handler::consumers::remove_member::RemoveMemberDaoSchema;
 
@@ -142,7 +143,7 @@ impl AsyncConsumer for RabbitMQConsumer {
 
         match result {
             Ok(success_message) => {
-                let _ = publisher.publish_message(&format!("{{\"msg\": \"{success_message}\"}}")).await;
+                let _ = publisher.publish_message(&format!("{{\"command_type\": \"{command}\", {success_message}}}")).await;
                 println!(
                     "[{:?} RABBITMQ INFO] {}",
                     chrono::Utc::now(),

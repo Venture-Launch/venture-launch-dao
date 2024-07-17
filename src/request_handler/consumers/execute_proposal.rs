@@ -3,14 +3,12 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 pub struct ProposalExecuteDaoSchema {
-    project_id: String
+    multisig_pda: String
 }
 
 pub async fn consume(request: ProposalExecuteDaoSchema) -> Result<String, String> {
-    let pda = dao_service::execute_proposal(request.project_id.clone()).await.unwrap();
+    let pda = dao_service::execute_proposal(request.multisig_pda.clone()).await.unwrap();
     return Ok(format!(
-        "Dao {}: {} created successfully",
-        request.project_id,
-        pda
+        "\"multisig_pda\": \"{}\"", request.multisig_pda
     ));
 }

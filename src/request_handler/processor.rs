@@ -38,13 +38,6 @@ impl RabbitMQPublisher {
             .await
             .unwrap();
 
-        // declare a queue
-        // let (_, _, _) = channel
-        //     .queue_declare(QueueDeclareArguments::durable_client_named("response_exchange").queue("response_exchange".to_string()).finish())
-        //     .await
-        //     .unwrap()
-        //     .unwrap();
-
         Ok(Self {
             connection: connection,
             channel: channel

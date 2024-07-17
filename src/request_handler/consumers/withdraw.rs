@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 pub struct WithdrawDaoSchema {
-    project_id: String,
+    multisig_pda: String,
     is_execute: bool,
     receiver: String,
     amount: u64
@@ -11,10 +11,8 @@ pub struct WithdrawDaoSchema {
 
 
 pub async fn consume(request: WithdrawDaoSchema) -> Result<String, String> {
-    let pda = dao_service::withdraw(request.project_id.clone(), request.is_execute, request.receiver, request.amount).await.unwrap();
+    let pda = dao_service::withdraw(request.multisig_pda.clone(), request.is_execute, request.receiver, request.amount).await.unwrap();
     return Ok(format!(
-        "Dao {}: {} created successfully",
-        request.project_id,
-        pda
+        "\"multisig_pda\": \"{}\"", request.multisig_pda
     ));
 }
