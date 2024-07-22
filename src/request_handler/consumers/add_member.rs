@@ -11,6 +11,7 @@ pub struct AddMemberDaoSchema {
 pub async fn consume(request: AddMemberDaoSchema) -> Result<String, String> {
     let pda = dao_service::add_member(request.multisig_pda.clone(), request.pubkey, request.permissions).await.unwrap();
     return Ok(format!(
-        "\"multisig_pda\": \"{}\"", request.multisig_pda
+        "\"multisig_pda\": \"{}\",
+    {pda}", request.multisig_pda
     ));
 }

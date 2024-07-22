@@ -109,7 +109,9 @@ pub async fn create_dao() -> Result<String, String> {
 
     Ok(format!(
         "\"multisig_pda\": \"{}\",
-        \"vault_pda\":  \"{} \"", multisig.get_multisig_pda().to_string(), multisig.get_vault_pda().to_string()
+        \"vault_pda\":  \"{}\",
+        \"threshold\":  \"{}\"",
+        multisig.get_multisig_pda().to_string(), multisig.get_vault_pda().to_string(), multisig.get_threshold().await.unwrap()
     ))
 }
 
@@ -126,27 +128,40 @@ pub async fn add_member(
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
 
-    let new_member = Pubkey::from_str(pubkey.as_str()).unwrap();
+    let new_member_pubkey = Pubkey::from_str(pubkey.as_str()).unwrap();
     let new_member = Member {
-        key: new_member,
+        key: new_member_pubkey,
         permissions: Permissions::from_vec(&[Permission::Vote]),
     };
 
-    let ix_add_member = multisig.instructions_add_member(creator_keypair.pubkey(), new_member).await.unwrap();
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_add_member]).await.unwrap();
+    let mut tx = multisig.transaction_add_member(creator_keypair.pubkey(), new_member).await.unwrap();
+    // let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_add_member]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let sig = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
     println!("sig: {}", sig);
 
     let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose]).await.unwrap();
+    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.unwrap();
+    let ix_exec = multisig.instruction_config_transaction_execute(creator_keypair.pubkey()).await.unwrap();
+    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose, ix_approve, ix_exec]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let sig = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
     println!("sig: {}", sig);
 
-    Ok("add member".to_string())
+    // let mems = multisig.get_multisig_members().await.unwrap();
+
+    // for mem in mems {
+    //     println!("{}", mem.key);
+    // }
+
+    Ok(
+        format!(
+            "\"member\":  \"{}\"",
+            new_member_pubkey
+        )
+    )
 }
 
 pub async fn remove_member(
@@ -160,22 +175,29 @@ pub async fn remove_member(
     let multisig = get_base_multisig(multisig_pda).await.unwrap();
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
-    let old_member = Pubkey::from_str(pubkey.as_str()).unwrap();
+    let old_member_pubkey = Pubkey::from_str(pubkey.as_str()).unwrap();
 
-    let ix_remove_member = multisig.instructions_remove_member(creator_keypair.pubkey(), old_member).await.unwrap();
+    let ix_remove_member = multisig.instructions_remove_member(creator_keypair.pubkey(), old_member_pubkey).await.unwrap();
     let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_remove_member]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
 
     let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose]).await.unwrap();
+    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.unwrap();
+    let ix_exec = multisig.instruction_config_transaction_execute(creator_keypair.pubkey()).await.unwrap();
+    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose, ix_approve, ix_exec]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let sig = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
     println!("sig: {}", sig);
 
-    Ok("remove member".to_string())
+    Ok(
+        format!(
+            "\"member\":  \"{}\"",
+            old_member_pubkey
+        )
+    )
 }
 
 pub async fn change_threshold(
@@ -197,11 +219,14 @@ pub async fn change_threshold(
     let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
 
     let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose]).await.unwrap();
+    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.unwrap();
+    let ix_exec = multisig.instruction_config_transaction_execute(creator_keypair.pubkey()).await.unwrap();
+    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose, ix_approve, ix_exec]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let sig = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
     println!("sig: {}", sig);
+
     Ok("change_threshold".to_string())
 }
 
