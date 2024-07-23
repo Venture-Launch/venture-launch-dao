@@ -264,18 +264,19 @@ pub async fn vote(
 
     let multisig: Arc<&dyn InvestorMultisigTrait> = Arc::new(&multisig);
 
-    let mut tx = match vote.as_str() {
+    let ix_proposal = match vote.as_str() {
         "Cancel" => {
-            multisig.transaction_proposal_cancel(creator_keypair.pubkey()).await.unwrap()
+            multisig.instruction_proposal_cancel(creator_keypair.pubkey()).await.unwrap()
         },
         "Approve" => {
-            multisig.transaction_proposal_approve(creator_keypair.pubkey()).await.unwrap()
+            multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.unwrap()
         },
         vote => {
             return Err(format!("{vote} is not an \"Approve\" or \"Cancel\""));
         }
     };
 
+    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_proposal]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
@@ -314,7 +315,7 @@ pub async fn withdraw(
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
 
-    let ix_proposal = multisig.instruction_transfer_from_vault(creator_keypair.pubkey(), receiver, amount).await.unwrap();
+    let ix_proposal = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
     let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_proposal]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
