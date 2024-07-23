@@ -10,6 +10,9 @@ use solana_sdk::native_token::LAMPORTS_PER_SOL;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::signer::Signer;
+use solana_sdk::transaction::Transaction;
+use spl_associated_token_account::get_associated_token_address;
+use spl_associated_token_account::instruction::create_associated_token_account;
 use squads_multisig::state::{Member, Permission, Permissions};
 
 use crate::dao_module::repositories::dao_repository;
@@ -47,6 +50,34 @@ async fn create_base_multisig(create_key: &Keypair) -> Result<BaseMultisig, Stri
         multisig_create_keypair: create_key.insecure_clone(),
         creator: creator_keypair.pubkey()
     }).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+
+    let token_program_id = Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap();
+    let token_mint = Pubkey::from_str("Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr").unwrap();
+
+    println!("{token_program_id}");
+    println!("{token_mint}");
+
+    let ix = create_associated_token_account(
+        &creator_keypair.pubkey(),
+        &multisig.get_vault_pda(),
+        &token_mint,
+        &token_program_id
+    );
+
+    let mut transaction = Transaction::new_with_payer(
+        &[ix],
+        Some(&creator_keypair.pubkey()),
+    );
+
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+    let _ = transaction.try_sign(&[&creator_keypair], recent_blockhash);
+    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&transaction).await.expect("Failed to send transaction");
+
+    let associated_token_address = get_associated_token_address(&multisig.get_vault_pda(), &token_mint);
+    let account_info = multisig.get_rpc_client().get_account(&associated_token_address).await;
+    if let Ok(_) = account_info {
+        println!("Associated token account already exists: {}", associated_token_address);
+    }
 
     Ok(multisig)
 }
