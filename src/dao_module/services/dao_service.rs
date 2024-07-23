@@ -264,24 +264,30 @@ pub async fn vote(
 
     let multisig: Arc<&dyn InvestorMultisigTrait> = Arc::new(&multisig);
 
-    let ix_proposal = match vote.as_str() {
+    let mut tx = match vote.as_str() {
         "Cancel" => {
-            multisig.instruction_proposal_cancel(creator_keypair.pubkey()).await.unwrap()
+            multisig.transaction_proposal_cancel(creator_keypair.pubkey()).await.unwrap()
         },
         "Approve" => {
-            multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.unwrap()
+            multisig.transaction_proposal_approve(creator_keypair.pubkey()).await.unwrap()
         },
         vote => {
             return Err(format!("{vote} is not an \"Approve\" or \"Cancel\""));
         }
     };
 
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_proposal]).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
 
-    Ok("vote".to_string())
+    Ok(
+        format!(
+            "\"voter\":  \"{}\",
+            \"vote\":  \"{}\"",
+            voter,
+            vote
+        )
+    )
 }
 
 pub async fn withdraw(
@@ -306,22 +312,38 @@ pub async fn withdraw(
         let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
         let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
 
-        return Ok("execute_withdraw".to_string());
+        return Ok(
+            format!(
+                "\"is_execute\":  \"{}\",
+                \"receiver\":  \"{}\",
+                \"amount\":  \"{}\"",
+                is_execute,
+                receiver,
+                amount
+            )
+        )
     }
 
-    let ix_withdraw = multisig.instruction_transfer_from_vault(creator_keypair.pubkey(), receiver, amount).await.unwrap();
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_withdraw]).await.unwrap();
+    let mut tx = multisig.transaction_vault_transaction_execute(creator_keypair.pubkey(), receiver, amount).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
 
-    let ix_proposal = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_proposal]).await.unwrap();
+    let mut tx = multisig.transaction_proposal_create(creator_keypair.pubkey()).await.unwrap();
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
 
-    Ok("withdraw".to_string())
+    Ok(
+        format!(
+            "\"is_execute\":  \"{}\",
+            \"receiver\":  \"{}\",
+            \"amount\":  \"{}\"",
+            is_execute,
+            receiver,
+            amount
+        )
+    )
 }
 
 pub fn update_dao() {
