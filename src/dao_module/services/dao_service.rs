@@ -37,8 +37,8 @@ fn get_rpc_client() -> Result<RpcClient, String> {
 }
 async fn create_base_multisig(create_key: &Keypair) -> Result<BaseMultisig, String> {
 
-    let rpc_client: RpcClient = get_rpc_client().unwrap();
-    let creator_keypair: Keypair = get_ba_keypair().await.unwrap();
+    let rpc_client: RpcClient = get_rpc_client().map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let creator_keypair: Keypair = get_ba_keypair().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     println!("creator: {}", creator_keypair.pubkey());
     println!("balance: {}", rpc_client.get_balance(&creator_keypair.pubkey()).await.unwrap());
@@ -46,7 +46,7 @@ async fn create_base_multisig(create_key: &Keypair) -> Result<BaseMultisig, Stri
         rpc_client,
         multisig_create_keypair: create_key.insecure_clone(),
         creator: creator_keypair.pubkey()
-    }).await.unwrap();
+    }).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     Ok(multisig)
 }
@@ -54,15 +54,15 @@ async fn create_base_multisig(create_key: &Keypair) -> Result<BaseMultisig, Stri
 async fn get_base_multisig(multisig_pda: Pubkey) -> Result<BaseMultisig, String> {
     dotenv().ok();
 
-    let rpc_client: RpcClient = get_rpc_client().unwrap();
+    let rpc_client: RpcClient = get_rpc_client().map_err(|err| format!("\"msg\": \"{err}\""))?;
 
-    let creator_keypair = get_ba_keypair().await.unwrap();
+    let creator_keypair = get_ba_keypair().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     let multisig = BaseMultisig::from_multisig_pda(BaseMultisigInitArgs {
         rpc_client,
         multisig_pda,
         creator: creator_keypair.pubkey()
-    }).await.unwrap();
+    }).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     Ok(multisig)
 }
@@ -92,17 +92,17 @@ pub async fn airdrop(
 
 pub async fn create_dao() -> Result<String, String> {
     let create_key = Keypair::new();
-    let creator_keypair = get_ba_keypair().await.unwrap();
+    let creator_keypair = get_ba_keypair().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
-    let multisig = create_base_multisig(&create_key).await.unwrap();
+    let multisig = create_base_multisig(&create_key).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
 
-    let mut tx = multisig.transaction_create_multisig(&[], 1, 0, &create_key).await.unwrap();
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+    let mut tx = multisig.transaction_create_multisig(&[], 1, 0, &create_key).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     println!("before try_sign");
     let _ = tx.try_sign(&[&creator_keypair, &create_key], recent_blockhash);
-    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
+    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     println!("after confirm");
     println!("multisig: {}", multisig.get_multisig_pda());
     dao_repository::create_dao();
@@ -122,35 +122,35 @@ pub async fn add_member(
 ) -> Result<String, String>  {
     dotenv().ok();
 
-    let creator_keypair = get_ba_keypair().await.unwrap();
-    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();
-    let multisig = get_base_multisig(multisig_pda).await.unwrap();
+    let creator_keypair = get_ba_keypair().await?;
+    let multisig_pda = Pubkey::from_str(&multisig_pda).map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let multisig = get_base_multisig(multisig_pda).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
 
-    let new_member_pubkey = Pubkey::from_str(pubkey.as_str()).unwrap();
+    let new_member_pubkey = Pubkey::from_str(pubkey.as_str()).map_err(|err| format!("\"msg\": \"{err}\""))?;
     let new_member = Member {
         key: new_member_pubkey,
         permissions: Permissions::from_vec(&[Permission::Vote]),
     };
 
-    let mut tx = multisig.transaction_add_member(creator_keypair.pubkey(), new_member).await.unwrap();
-    // let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_add_member]).await.unwrap();
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+    let mut tx = multisig.transaction_add_member(creator_keypair.pubkey(), new_member).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    // let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_add_member]).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let sig = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
+    let sig = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     println!("sig: {}", sig);
 
-    let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
-    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.unwrap();
-    let ix_exec = multisig.instruction_config_transaction_execute(creator_keypair.pubkey()).await.unwrap();
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose, ix_approve, ix_exec]).await.unwrap();
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+    let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let ix_exec = multisig.instruction_config_transaction_execute(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose, ix_approve, ix_exec]).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let sig = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
+    let sig = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     println!("sig: {}", sig);
 
-    // let mems = multisig.get_multisig_members().await.unwrap();
+    // let mems = multisig.get_multisig_members().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     // for mem in mems {
     //     println!("{}", mem.key);
@@ -170,26 +170,26 @@ pub async fn remove_member(
 ) -> Result<String, String>  {
     dotenv().ok();
 
-    let creator_keypair = get_ba_keypair().await.unwrap();
-    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();
-    let multisig = get_base_multisig(multisig_pda).await.unwrap();
+    let creator_keypair = get_ba_keypair().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let multisig_pda = Pubkey::from_str(&multisig_pda).map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let multisig = get_base_multisig(multisig_pda).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
-    let old_member_pubkey = Pubkey::from_str(pubkey.as_str()).unwrap();
+    let old_member_pubkey = Pubkey::from_str(pubkey.as_str()).map_err(|err| format!("\"msg\": \"{err}\""))?;
 
-    let ix_remove_member = multisig.instructions_remove_member(creator_keypair.pubkey(), old_member_pubkey).await.unwrap();
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_remove_member]).await.unwrap();
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+    let ix_remove_member = multisig.instructions_remove_member(creator_keypair.pubkey(), old_member_pubkey).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_remove_member]).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
+    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
-    let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
-    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.unwrap();
-    let ix_exec = multisig.instruction_config_transaction_execute(creator_keypair.pubkey()).await.unwrap();
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose, ix_approve, ix_exec]).await.unwrap();
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+    let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let ix_exec = multisig.instruction_config_transaction_execute(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose, ix_approve, ix_exec]).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let sig = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
+    let sig = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     println!("sig: {}", sig);
 
     Ok(
@@ -206,28 +206,33 @@ pub async fn change_threshold(
 ) -> Result<String, String>  {
     dotenv().ok();
 
-    let creator_keypair = get_ba_keypair().await.unwrap();
-    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();
-    let multisig = get_base_multisig(multisig_pda).await.unwrap();
+    let creator_keypair = get_ba_keypair().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let multisig_pda = Pubkey::from_str(&multisig_pda).map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let multisig = get_base_multisig(multisig_pda).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
 
-    let ix_change_threshold = multisig.instruction_change_threshold(creator_keypair.pubkey(), new_threshold).await.unwrap();
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_change_threshold]).await.unwrap();
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+    let ix_change_threshold = multisig.instruction_change_threshold(creator_keypair.pubkey(), new_threshold).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_change_threshold]).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
+    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
-    let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
-    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.unwrap();
-    let ix_exec = multisig.instruction_config_transaction_execute(creator_keypair.pubkey()).await.unwrap();
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose, ix_approve, ix_exec]).await.unwrap();
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+    let ix_prpose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let ix_exec = multisig.instruction_config_transaction_execute(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_prpose, ix_approve, ix_exec]).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let sig = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
+    let sig = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     println!("sig: {}", sig);
 
-    Ok("change_threshold".to_string())
+    Ok(
+        format!(
+            "\"new_threshold\":  \"{}\"",
+            new_threshold
+        )
+    )
 }
 
 pub async fn execute_proposal(
@@ -235,18 +240,22 @@ pub async fn execute_proposal(
 ) -> Result<String, String>  {
     dotenv().ok();
 
-    let creator_keypair = get_ba_keypair().await.unwrap();
-    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();
-    let multisig = get_base_multisig(multisig_pda).await.unwrap();
+    let creator_keypair = get_ba_keypair().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let multisig_pda = Pubkey::from_str(&multisig_pda).map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let multisig = get_base_multisig(multisig_pda).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
 
-    let mut tx = multisig.transaction_config_transaction_execute(creator_keypair.pubkey()).await.unwrap();
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+    let mut tx = multisig.transaction_config_transaction_execute(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
+    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
-    Ok("propose".to_string())
+    Ok(
+        format!(
+            "\"propose\":  \"success\""
+        )
+    )
 }
 
 pub async fn vote(
@@ -256,11 +265,11 @@ pub async fn vote(
 ) -> Result<String, String>  {
     dotenv().ok();
 
-    let creator_keypair = get_ba_keypair().await.unwrap();
-    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();
-    let multisig = get_base_multisig(multisig_pda).await.unwrap();
+    let creator_keypair = get_ba_keypair().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let multisig_pda = Pubkey::from_str(&multisig_pda).map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let multisig = get_base_multisig(multisig_pda).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
-    let voter = Pubkey::from_str(voter.as_str()).unwrap();
+    let voter = Pubkey::from_str(voter.as_str()).map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     let multisig: Arc<&dyn InvestorMultisigTrait> = Arc::new(&multisig);
 
@@ -276,9 +285,9 @@ pub async fn vote(
         }
     };
 
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
+    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     Ok(
         format!(
@@ -298,19 +307,19 @@ pub async fn withdraw(
 ) -> Result<String, String>  {
     dotenv().ok();
 
-    let creator_keypair = get_ba_keypair().await.unwrap();
-    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();
-    let multisig = get_base_multisig(multisig_pda).await.unwrap();
+    let creator_keypair = get_ba_keypair().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let multisig_pda = Pubkey::from_str(&multisig_pda).map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let multisig = get_base_multisig(multisig_pda).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
 
-    let receiver = Pubkey::from_str(&receiver).unwrap();
+    let receiver = Pubkey::from_str(&receiver).map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     if is_execute == true {
-        let mut tx = multisig.transaction_vault_transaction_execute(creator_keypair.pubkey(), receiver, amount).await.unwrap();
-        let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+        let mut tx = multisig.transaction_vault_transaction_execute(creator_keypair.pubkey(), receiver, amount).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+        let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
         let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-        let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
+        let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
         return Ok(
             format!(
@@ -324,18 +333,18 @@ pub async fn withdraw(
         )
     }
 
-    let finance = multisig.get_rpc_client().get_balance(&multisig.get_vault_pda()).await.unwrap();
+    let finance = multisig.get_rpc_client().get_balance(&multisig.get_vault_pda()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     println!("vault: {}", finance);
 
-    let mut tx = multisig.transaction_transfer_from_vault(creator_keypair.pubkey(), receiver, amount).await.unwrap();
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+    let mut tx = multisig.transaction_transfer_from_vault(creator_keypair.pubkey(), receiver, amount).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
+    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
-    let mut tx = multisig.transaction_proposal_create(creator_keypair.pubkey()).await.unwrap();
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
+    let mut tx = multisig.transaction_proposal_create(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
+    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
     Ok(
         format!(

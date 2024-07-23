@@ -11,6 +11,6 @@ pub async fn consume(request: ChangeThresholdDaoSchema) -> Result<String, String
     let pda = dao_service::change_threshold(request.multisig_pda.clone(), request.new_threshold).await.unwrap();
     return Ok(format!(
         "\"multisig_pda\": \"{}\",
-        \"new_threshold\": \"{}\"", request.multisig_pda, request.new_threshold
+        {pda}", request.multisig_pda
     ));
 }

@@ -35,6 +35,7 @@ impl RabbitMQPublisher {
         let channel = connection.open_channel(None).await.unwrap();
         channel
             .register_callback(DefaultChannelCallback)
+            
             .await
             .unwrap();
 
@@ -102,7 +103,7 @@ pub async fn start_consumer(
 
     // declare a queue
     let (queue_name, _, _) = channel
-        .queue_declare(QueueDeclareArguments::default().queue("request_exchange".to_string()).finish())
+        .queue_declare(QueueDeclareArguments::default().queue("request_exchange".to_string()).durable(true).finish())
         .await
         .unwrap()
         .unwrap();

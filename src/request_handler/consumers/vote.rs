@@ -11,6 +11,7 @@ pub struct VoteDaoSchema {
 pub async fn consume(request: VoteDaoSchema) -> Result<String, String> {
     let pda = dao_service::vote(request.multisig_pda.clone(), request.voter, request.vote).await.unwrap();
     return Ok(format!(
-        "\"multisig_pda\": \"{}\"", request.multisig_pda
+        "\"multisig_pda\": \"{}\",
+        {pda}", request.multisig_pda
     ));
 }
