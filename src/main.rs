@@ -38,7 +38,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "response.consumer",
     );
 
-    let _ = tokio::join!(rabbit_consume, rabbit_publish);
+    // let _ = tokio::join!(rabbit_consume, rabbit_publish);
+    let _ = tokio::join!(rabbit_consume);
 
     // env_logger::init();
 
