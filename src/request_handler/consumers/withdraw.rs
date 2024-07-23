@@ -4,7 +4,7 @@ use serde::Deserialize;
 #[derive(Deserialize, Debug)]
 pub struct WithdrawDaoSchema {
     multisig_pda: String,
-    proposal_id: u64,
+    proposal_id: String,
     is_execute: bool,
     receiver: String,
     amount: u64

@@ -333,8 +333,8 @@ pub async fn withdraw(
         )
     }
 
-    let finance = multisig.get_rpc_client().get_balance(&multisig.get_vault_pda()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
-    println!("vault: {}", finance);
+    // let finance = multisig.get_rpc_client().get_balance(&multisig.get_vault_pda()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    // println!("vault: {}", finance);
 
     let mut tx = multisig.transaction_transfer_from_vault(creator_keypair.pubkey(), receiver, amount).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
