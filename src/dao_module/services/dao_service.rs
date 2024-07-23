@@ -266,10 +266,10 @@ pub async fn vote(
 
     let mut tx = match vote.as_str() {
         "Cancel" => {
-            multisig.transaction_proposal_cancel(voter).await.unwrap()
+            multisig.transaction_proposal_cancel(creator_keypair.pubkey()).await.unwrap()
         },
         "Approve" => {
-            multisig.transaction_proposal_approve(voter).await.unwrap()
+            multisig.transaction_proposal_approve(creator_keypair.pubkey()).await.unwrap()
         },
         vote => {
             return Err(format!("{vote} is not an \"Approve\" or \"Cancel\""));
