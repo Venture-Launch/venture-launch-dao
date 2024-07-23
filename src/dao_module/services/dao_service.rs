@@ -341,7 +341,9 @@ pub async fn withdraw(
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
 
-    let mut tx = multisig.transaction_proposal_create(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let ix_propose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_propose, ix_approve]).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
     let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
