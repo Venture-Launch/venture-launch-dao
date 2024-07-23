@@ -29,14 +29,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "request.consumer",
     );
 
-    let rabbit_publish    = request_handler::processor::start_publisher(
-        host.as_str(),
-        5672,
-        "guest",
-        "guest",
-        resp_exchange,
-        "response.consumer",
-    );
+    // let rabbit_publish    = request_handler::processor::start_publisher(
+    //     host.as_str(),
+    //     5672,
+    //     "guest",
+    //     "guest",
+    //     resp_exchange,
+    //     "response.consumer",
+    // );
 
     // let _ = tokio::join!(rabbit_consume, rabbit_publish);
     let _ = tokio::join!(rabbit_consume);
