@@ -338,19 +338,19 @@ pub async fn withdraw(
 ) -> Result<String, String>  {
     dotenv().ok();
 
-    let creator_keypair = get_ba_keypair().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
-    let multisig_pda = Pubkey::from_str(&multisig_pda).map_err(|err| format!("\"msg\": \"{err}\""))?;
-    let multisig = get_base_multisig(multisig_pda).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let creator_keypair = get_ba_keypair().await.unwrap();;
+    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();;
+    let multisig = get_base_multisig(multisig_pda).await.unwrap();;
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
 
-    let receiver = Pubkey::from_str(&receiver).map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let receiver = Pubkey::from_str(&receiver).unwrap();;
 
     if is_execute == true {
-        let mut tx = multisig.transaction_vault_transaction_execute(creator_keypair.pubkey(), receiver, amount).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
-        let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+        let mut tx = multisig.transaction_vault_transaction_execute(creator_keypair.pubkey(), receiver, amount).await.unwrap();;
+        let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();;
         let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-        let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+        let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();;
 
         return Ok(
             format!(
@@ -364,20 +364,20 @@ pub async fn withdraw(
         )
     }
 
-    // let finance = multisig.get_rpc_client().get_balance(&multisig.get_vault_pda()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    // let finance = multisig.get_rpc_client().get_balance(&multisig.get_vault_pda()).await.unwrap();;
     // println!("vault: {}", finance);
 
-    let mut tx = multisig.transaction_transfer_from_vault(creator_keypair.pubkey(), receiver, amount).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let mut tx = multisig.transaction_transfer_from_vault(creator_keypair.pubkey(), receiver, amount).await.unwrap();;
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();;
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();;
 
-    let ix_propose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
-    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_propose, ix_approve]).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let ix_propose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();;
+    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.unwrap();;
+    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_propose, ix_approve]).await.unwrap();;
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();;
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
+    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();;
 
     Ok(
         format!(

@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use super::{
     base_multisig::{BaseMultisig, BaseMultisigCreateArgs},
     base_multisig_trait::BaseMultisigTrait,
@@ -7,6 +9,7 @@ use async_trait::async_trait;
 use solana_sdk::{
     instruction::Instruction, pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction, system_program, transaction::Transaction
 };
+use spl_associated_token_account::get_associated_token_address_with_program_id;
 use squads_multisig::{
     client::{
         self, config_transaction_create, config_transaction_execute, multisig_create_v2,
@@ -302,13 +305,23 @@ impl BusinessAnalystMultisigTrait<BaseMultisigCreateArgs> for BaseMultisig {
             get_transaction_pda(&self.multisig_pda, transaction_index, Some(&program_id));
         let vault_index = 0;
 
+        let token_program_id = Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap();
+        let token_mint = Pubkey::from_str("Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr").unwrap();
+
+        let source_pubkey = get_associated_token_address_with_program_id(&self.vault_pda, &token_mint, &token_program_id);
+        let destination_pubkey = get_associated_token_address_with_program_id(&receiver, &token_mint, &token_program_id);
+
+        let ix = spl_token::instruction::transfer(
+            &token_program_id,
+            &source_pubkey,
+            &destination_pubkey,
+            &self.vault_pda,
+            &[&self.vault_pda],
+            lamports).unwrap();
+
         let message = TransactionMessage::try_compile(
             &self.vault_pda,
-            &[system_instruction::transfer(
-                &self.vault_pda,
-                &receiver,
-                lamports,
-            )],
+            &[ix],
             &[],
         )
         .unwrap();
@@ -403,13 +416,25 @@ impl BusinessAnalystMultisigTrait<BaseMultisigCreateArgs> for BaseMultisig {
             get_proposal_pda(&self.multisig_pda, transaction_index, Some(&program_id));
         let vault_index = 0;
 
+        let token_program_id = Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap();
+        let token_mint = Pubkey::from_str("Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr").unwrap();
+
+        let source_pubkey = get_associated_token_address_with_program_id(&self.vault_pda, &token_mint, &token_program_id);
+        let destination_pubkey = get_associated_token_address_with_program_id(&receiver, &token_mint, &token_program_id);
+
+        println!("{destination_pubkey}");
+
+        let ix = spl_token::instruction::transfer(
+            &token_program_id,
+            &source_pubkey,
+            &destination_pubkey,
+            &self.vault_pda,
+            &[&self.vault_pda],
+            lamports).unwrap();
+
         let message = TransactionMessage::try_compile(
             &self.vault_pda,
-            &[system_instruction::transfer(
-                &self.vault_pda,
-                &receiver,
-                lamports,
-            )],
+            &[ix],
             &[],
         )
         .unwrap();
