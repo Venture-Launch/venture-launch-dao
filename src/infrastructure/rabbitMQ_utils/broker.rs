@@ -53,6 +53,7 @@ impl Broker {
             .unwrap();
 
         let args = ExchangeDeclareArguments::of_type(&self.exchange, ExchangeType::Direct)
+        .durable(true)
         .finish();
 
         // declare exchange

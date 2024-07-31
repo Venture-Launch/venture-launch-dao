@@ -126,7 +126,7 @@ impl AsyncConsumer for RabbitMQConsumer {
         match result {
             Ok(success_message) => {
                 if let Some(publisher) = &self.publisher {
-                    let _ = publisher.publish_message(&success_message);
+                    let _ = publisher.publish_message(&success_message).await;
                 }
                 println!(
                     "[{:?} RABBITMQ INFO] {}",

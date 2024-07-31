@@ -10,7 +10,7 @@ pub struct RemoveMemberDaoSchema {
 pub async fn consume(request: RemoveMemberDaoSchema) -> Result<String, String> {
     let pda = dao_service::remove_member(request.multisig_pda.clone(), request.pubkey).await.unwrap();
     return Ok(format!(
-        "\"multisig_pda\": \"{}\",
-    {pda}", request.multisig_pda
+        "{{\"multisig_pda\": \"{}\",
+    {pda}}}", request.multisig_pda
     ));
 }

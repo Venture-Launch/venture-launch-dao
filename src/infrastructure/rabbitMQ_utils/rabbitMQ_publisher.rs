@@ -47,7 +47,7 @@ impl RabbitMQPublisher {
             return Err("Channel is not open".to_string());
         }
 
-        let args = BasicPublishArguments::new("request_exchange", "response_exchange");
+        let args = BasicPublishArguments::new("dao_exchange", "broker.response");
 
         self.channel
             .basic_publish(
