@@ -1,4 +1,4 @@
-use crate::dao_module::services::dao_service;
+use crate::domain::services::dao_service;
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]

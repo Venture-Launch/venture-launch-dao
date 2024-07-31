@@ -4,8 +4,7 @@ use std::sync::Arc;
 
 use dotenv::dotenv;
 
-use ed25519_dalek::{PublicKey, SecretKey};
-use solana_client::nonblocking::rpc_client::{self, RpcClient};
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::native_token::LAMPORTS_PER_SOL;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
@@ -15,11 +14,11 @@ use spl_associated_token_account::get_associated_token_address;
 use spl_associated_token_account::instruction::create_associated_token_account;
 use squads_multisig::state::{Member, Permission, Permissions};
 
-use crate::dao_module::repositories::dao_repository;
-use crate::multisig_utils::base_multisig::{BaseMultisig, BaseMultisigCreateArgs, BaseMultisigInitArgs};
-use crate::multisig_utils::base_multisig_trait::{self, BaseMultisigTrait};
-use crate::multisig_utils::business_analyst_multisig_trait::BusinessAnalystMultisigTrait;
-use crate::multisig_utils::investor_multisig_trait::InvestorMultisigTrait;
+
+use crate::domain::entities::multisig::base_multisig::{BaseMultisig, BaseMultisigCreateArgs, BaseMultisigInitArgs};
+use crate::domain::entities::multisig::base_multisig_trait::BaseMultisigTrait;
+use crate::domain::entities::multisig::business_analyst_multisig_trait::BusinessAnalystMultisigTrait;
+use crate::domain::entities::multisig::investor_multisig_trait::InvestorMultisigTrait;
 
 async fn get_ba_keypair() -> Result<Keypair, String> {
     dotenv().ok();
@@ -136,7 +135,6 @@ pub async fn create_dao() -> Result<String, String> {
     let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.map_err(|err| format!("\"msg\": \"{err}\""))?;
     println!("after confirm");
     println!("multisig: {}", multisig.get_multisig_pda());
-    dao_repository::create_dao();
 
     Ok(format!(
         "\"multisig_pda\": \"{}\",
@@ -149,7 +147,7 @@ pub async fn create_dao() -> Result<String, String> {
 pub async fn add_member(
     multisig_pda: String,
     pubkey: String,
-    permissions: Vec<String>
+    _permissions: Vec<String>
 ) -> Result<String, String>  {
     dotenv().ok();
 
@@ -338,19 +336,19 @@ pub async fn withdraw(
 ) -> Result<String, String>  {
     dotenv().ok();
 
-    let creator_keypair = get_ba_keypair().await.unwrap();;
-    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();;
-    let multisig = get_base_multisig(multisig_pda).await.unwrap();;
+    let creator_keypair = get_ba_keypair().await.unwrap();
+    let multisig_pda = Pubkey::from_str(&multisig_pda).unwrap();
+    let multisig = get_base_multisig(multisig_pda).await.unwrap();
 
     let multisig: Arc<&dyn BusinessAnalystMultisigTrait> = Arc::new(&multisig);
 
-    let receiver = Pubkey::from_str(&receiver).unwrap();;
+    let receiver = Pubkey::from_str(&receiver).unwrap();
 
     if is_execute == true {
-        let mut tx = multisig.transaction_vault_transaction_execute(creator_keypair.pubkey(), receiver, amount).await.unwrap();;
-        let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();;
+        let mut tx = multisig.transaction_vault_transaction_execute(creator_keypair.pubkey(), receiver, amount).await.unwrap();
+        let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
         let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-        let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();;
+        let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
 
         return Ok(
             format!(
@@ -367,17 +365,17 @@ pub async fn withdraw(
     // let finance = multisig.get_rpc_client().get_balance(&multisig.get_vault_pda()).await.unwrap();;
     // println!("vault: {}", finance);
 
-    let mut tx = multisig.transaction_transfer_from_vault(creator_keypair.pubkey(), receiver, amount).await.unwrap();;
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();;
+    let mut tx = multisig.transaction_transfer_from_vault(creator_keypair.pubkey(), receiver, amount).await.unwrap();
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();;
+    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
 
-    let ix_propose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();;
-    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.unwrap();;
-    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_propose, ix_approve]).await.unwrap();;
-    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();;
+    let ix_propose = multisig.instruction_proposal_create(creator_keypair.pubkey()).await.unwrap();
+    let ix_approve = multisig.instruction_proposal_approve(creator_keypair.pubkey()).await.unwrap();
+    let mut tx = multisig.get_transaction_from_instructions(creator_keypair.pubkey(), &[ix_propose, ix_approve]).await.unwrap();
+    let recent_blockhash = multisig.get_rpc_client().get_latest_blockhash().await.unwrap();
     let _ = tx.try_sign(&[&creator_keypair], recent_blockhash);
-    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();;
+    let _ = multisig.get_rpc_client().send_and_confirm_transaction(&tx).await.unwrap();
 
     Ok(
         format!(
@@ -389,8 +387,4 @@ pub async fn withdraw(
             amount
         )
     )
-}
-
-pub fn update_dao() {
-    dao_repository::update_dao();
 }

@@ -16,7 +16,7 @@ impl InvestorMultisigTrait<BaseMultisigCreateArgs> for BaseMultisig {
 mod tests {
     use std::{error::Error, sync::Arc};
 
-    use crate::multisig_utils::{business_analyst_multisig_trait::BusinessAnalystMultisigTrait, error::BaseMultisigError};
+    use crate::domain::entities::multisig::{business_analyst_multisig_trait::BusinessAnalystMultisigTrait, error::BaseMultisigError};
 
     use super::*;
     use solana_client::nonblocking::rpc_client::RpcClient;

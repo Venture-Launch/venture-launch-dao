@@ -7,7 +7,7 @@ use super::{
 };
 use async_trait::async_trait;
 use solana_sdk::{
-    instruction::Instruction, pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction, system_program, transaction::Transaction
+    instruction::Instruction, pubkey::Pubkey, signature::Keypair, signer::Signer, system_program, transaction::Transaction
 };
 use spl_associated_token_account::get_associated_token_address_with_program_id;
 use squads_multisig::{
@@ -495,7 +495,7 @@ impl BusinessAnalystMultisigTrait<BaseMultisigCreateArgs> for BaseMultisig {
 mod tests {
     use std::{error::Error, sync::Arc};
 
-    use crate::multisig_utils::error::BaseMultisigError;
+    use crate::domain::entities::multisig::error::BaseMultisigError;
 
     use super::*;
     use solana_client::nonblocking::rpc_client::RpcClient;
