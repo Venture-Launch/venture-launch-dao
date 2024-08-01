@@ -66,13 +66,15 @@ impl Broker {
             .await
             .unwrap();
 
-        let channel_publish = connection.open_channel(None).await.unwrap();
-        channel_publish
-            .register_callback(DefaultChannelCallback)
-            .await
-            .unwrap();
+        // let channel_publish = connection.open_channel(None).await.unwrap();
+        // channel_publish
+        //     .register_callback(DefaultChannelCallback)
+        //     .await
+        //     .unwrap();
 
-        let _ = tokio::join!(self.start_consumer(channel_consume), self.start_publisher(channel_publish));
+        let _ = tokio::join!(self.start_consumer(channel_consume)
+        // , self.start_publisher(channel_publish)
+    );
 
         Ok(())
     }
