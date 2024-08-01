@@ -9,7 +9,7 @@ pub struct ProposalExecuteDaoSchema {
 pub async fn consume(request: ProposalExecuteDaoSchema) -> Result<String, String> {
     let pda = dao_service::execute_proposal(request.multisig_pda.clone()).await.unwrap();
     return Ok(format!(
-        "{{\"multisig_pda\": \"{}\",
-        {pda}}}", request.multisig_pda
+        "\"multisig_pda\": \"{}\",
+        {pda}", request.multisig_pda
     ));
 }

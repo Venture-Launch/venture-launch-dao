@@ -126,7 +126,7 @@ impl AsyncConsumer for RabbitMQConsumer {
         match result {
             Ok(success_message) => {
                 if let Some(publisher) = &self.publisher {
-                    let _ = publisher.publish_message(&success_message).await;
+                    let _ = publisher.publish_message(format!("{{\"command_type\" : \"{command}\", {success_message}}}").as_str()).await;
                 }
                 println!(
                     "[{:?} RABBITMQ INFO] {}",

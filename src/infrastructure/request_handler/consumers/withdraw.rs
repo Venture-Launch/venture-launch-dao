@@ -14,8 +14,8 @@ pub struct WithdrawDaoSchema {
 pub async fn consume(request: WithdrawDaoSchema) -> Result<String, String> {
     let pda = dao_service::withdraw(request.multisig_pda.clone(), request.is_execute, request.receiver, request.amount).await.unwrap();
     return Ok(format!(
-        "{{\"multisig_pda\": \"{}\",
+        "\"multisig_pda\": \"{}\",
         \"proposal_id\": \"{}\",
-        {pda}}}", request.multisig_pda, request.proposal_id
+        {pda}", request.multisig_pda, request.proposal_id
     ));
 }
